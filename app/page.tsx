@@ -47,7 +47,6 @@ import {
   EQUIPMENT,
   formatDuration,
   formatMoney,
-  GameLog,
   GardenProperty,
   grassHint,
   humanOfflineDuration,
@@ -65,6 +64,7 @@ import {
 } from '@/lib/game';
 
 const taskIcons = { mow: Sprout, water: Droplets, maintain: Wrench };
+type GaugeTone = 'green' | 'blue' | 'amber' | 'rose';
 
 function statusBadge(property: GardenProperty) {
   const status = propertyStatus(property);
@@ -78,44 +78,74 @@ function statusBadge(property: GardenProperty) {
   return <Badge className={classes[status.tone]}>{status.label}</Badge>;
 }
 
-function Metric({
-  label,
+function metricTone(kind: TaskKind, value: number): GaugeTone {
+  if (kind === 'mow') return value >= 60 && value <= 80 ? 'green' : value > 100 ? 'rose' : 'amber';
+  if (kind === 'water') return value >= 30 && value <= 85 ? 'blue' : value > 100 ? 'rose' : 'amber';
+  return value >= 70 ? 'green' : value < 40 ? 'rose' : 'amber';
+}
+
+function satisfactionClass(value: number) {
+  if (value >= 75) return 'text-emerald-700';
+  if (value >= 40) return 'text-amber-700';
+  return 'text-rose-700';
+}
+
+function GaugeRing({
   value,
-  hint,
-  icon: Icon,
+  max = 100,
   tone,
+  size = 'large',
 }: {
-  label: string;
   value: number;
-  hint: string;
-  icon: typeof Sprout;
-  tone: 'green' | 'blue' | 'amber' | 'rose';
+  max?: number;
+  tone: GaugeTone;
+  size?: 'small' | 'large';
 }) {
-  const progressClass = {
-    green: '[&_[data-slot=progress-indicator]]:bg-emerald-600',
-    blue: '[&_[data-slot=progress-indicator]]:bg-sky-500',
-    amber: '[&_[data-slot=progress-indicator]]:bg-amber-500',
-    rose: '[&_[data-slot=progress-indicator]]:bg-rose-500',
+  const stroke = {
+    green: 'stroke-emerald-600',
+    blue: 'stroke-sky-500',
+    amber: 'stroke-amber-500',
+    rose: 'stroke-rose-500',
   }[tone];
+  const dimension = size === 'small' ? 'size-9' : 'size-20';
+  const textSize = size === 'small' ? 'text-[9px]' : 'text-base';
+  const percent = Math.min(100, Math.max(0, (value / max) * 100));
 
   return (
-    <div className="rounded-xl border border-border bg-card p-3.5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
-          {label}
-        </span>
-        <Icon className="size-4 text-primary" aria-hidden="true" />
-      </div>
-      <Progress
-        value={Math.min(100, value)}
-        className={`[&_[data-slot=progress-track]]:h-2 ${progressClass}`}
-      />
-      <div className="mt-2.5 flex items-start justify-between gap-2 text-xs">
-        <span className="font-medium text-foreground">{hint}</span>
-        <span className="tabular-nums text-muted-foreground">{Math.round(value)}/100</span>
-      </div>
-    </div>
+    <span
+      className={`relative grid shrink-0 place-items-center ${dimension}`}
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(value)}
+    >
+      <svg viewBox="0 0 44 44" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
+        <circle cx="22" cy="22" r="18" fill="none" strokeWidth="4" className="stroke-muted" />
+        <circle
+          cx="22"
+          cy="22"
+          r="18"
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          pathLength="100"
+          strokeDasharray={`${percent} 100`}
+          className={`${stroke} transition-all duration-500`}
+        />
+      </svg>
+      <strong className={`relative tabular-nums ${textSize}`}>{Math.round(value)}</strong>
+    </span>
   );
+}
+
+function propertyWarnings(property: GardenProperty) {
+  const warnings: Array<{ label: string; icon: typeof CircleAlert; tone: string }> = [];
+  if (property.rescueUntil) warnings.push({ label: 'Vertrag akut gefährdet', icon: CircleAlert, tone: 'text-rose-700 bg-rose-100' });
+  if (property.grass > 80) warnings.push({ label: 'Rasen außerhalb des optimalen Fensters', icon: Sprout, tone: 'text-amber-700 bg-amber-100' });
+  if (property.moisture < 30 || property.moisture > 85) warnings.push({ label: 'Feuchtigkeit außerhalb des optimalen Bereichs', icon: Droplets, tone: 'text-sky-700 bg-sky-100' });
+  if (property.condition < 40) warnings.push({ label: 'Gerätewartung erforderlich', icon: Wrench, tone: 'text-rose-700 bg-rose-100' });
+  if (property.task) warnings.push({ label: `${TASK_LABELS[property.task.kind]} läuft`, icon: Timer, tone: 'text-primary bg-secondary' });
+  return warnings;
 }
 
 function AppHeader({
@@ -182,7 +212,7 @@ function AppHeader({
           </div>
           <div className="rounded-lg bg-primary px-2.5 py-1.5 text-primary-foreground sm:min-w-28">
             <span className="hidden text-[10px] text-primary-foreground/70 sm:block">Vermögen</span>
-            <span className="block text-sm font-semibold tabular-nums">{formatMoney(money)}</span>
+            <span className="block text-sm font-semibold tabular-nums">{formatMoney(money, true)}</span>
           </div>
           <Badge variant="secondary" className="hidden h-9 gap-1.5 px-3 sm:inline-flex">
             <ShieldCheck className="size-3.5" /> {Math.floor(reputation)}
@@ -218,35 +248,62 @@ function PropertyRail({
         <div className="flex gap-2 p-2 lg:flex-col">
           {properties.map((property) => {
             const selected = property.id === selectedId;
+            const warnings = propertyWarnings(property);
+            const miniGauges = [
+              { kind: 'mow' as const, label: 'Gras', value: property.grass, max: 150, icon: Sprout },
+              { kind: 'water' as const, label: 'Feuchte', value: property.moisture, max: 150, icon: Droplets },
+              { kind: 'maintain' as const, label: 'Geräte', value: property.condition, max: 100, icon: Wrench },
+            ];
             return (
               <button
                 key={property.id}
-                className={`min-w-52 rounded-lg border p-3 text-left transition-colors lg:min-w-0 ${
+                className={`min-w-72 rounded-lg border p-3 text-left transition-colors lg:min-w-0 ${
                   selected
                     ? 'border-primary/30 bg-secondary shadow-sm'
                     : 'border-transparent hover:border-border hover:bg-muted/60'
                 }`}
                 onClick={() => onSelect(property.id)}
               >
-                <span className="mb-2 flex items-start justify-between gap-2">
-                  <span className="min-w-0">
+                <span className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{property.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                       {property.size.toLocaleString('de-DE')} m² · {property.type}
                     </span>
                   </span>
-                  {statusBadge(property)}
+                  {warnings.length > 0 && (
+                    <span className="flex shrink-0 items-center gap-1">
+                      {warnings.slice(0, 3).map(({ label, icon: WarningIcon, tone }) => (
+                        <span
+                          key={label}
+                          className={`grid size-6 place-items-center rounded-md ${tone}`}
+                          title={label}
+                          aria-label={label}
+                        >
+                          <WarningIcon className="size-3.5" aria-hidden="true" />
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                    <span
-                      className="block h-full rounded-full bg-primary transition-[width]"
-                      style={{ width: `${property.satisfaction}%` }}
-                    />
+                <span className="mt-3 flex items-baseline justify-between border-t border-border/70 pt-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Zufriedenheit
                   </span>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {Math.round(property.satisfaction)}%
+                  <span className={`text-sm font-bold tabular-nums ${satisfactionClass(property.satisfaction)}`}>
+                    {Math.round(property.satisfaction)} %
                   </span>
+                </span>
+                <span className="mt-2 grid grid-cols-3 gap-1.5">
+                  {miniGauges.map(({ kind, label, value, max, icon: Icon }) => (
+                    <span key={kind} className="flex items-center gap-1 rounded-md bg-card/75 px-1.5 py-1.5">
+                      <GaugeRing value={value} max={max} tone={metricTone(kind, value)} size="small" />
+                      <span className="min-w-0">
+                        <Icon className="mb-0.5 size-3 text-muted-foreground" aria-hidden="true" />
+                        <span className="block truncate text-[9px] text-muted-foreground">{label}</span>
+                      </span>
+                    </span>
+                  ))}
                 </span>
               </button>
             );
@@ -257,7 +314,7 @@ function PropertyRail({
   );
 }
 
-function TaskCard({
+function StatActionCard({
   property,
   kind,
   manualBusy,
@@ -272,31 +329,71 @@ function TaskCard({
   const equipment = EQUIPMENT[kind][property.equipment[kind]];
   const active = property.task?.kind === kind;
   const duration = taskDuration(property, kind);
-  const payout = kind === 'mow' ? mowingPayout(property) : 0;
+  const payout =
+    kind === 'mow'
+      ? active
+        ? property.task?.payoutTotal ?? mowingPayout(property)
+        : mowingPayout(property)
+      : 0;
   const cost = kind === 'maintain' ? maintenanceCost(property) : 0;
   const automatic = isAutomated(property, kind);
   const handsFree = Boolean(equipment.handsFree);
   const blocked = Boolean(property.task) || (!automatic && manualBusy) || (property.condition <= 0 && kind !== 'maintain');
+  const value = kind === 'mow' ? property.grass : kind === 'water' ? property.moisture : property.condition;
+  const max = kind === 'maintain' ? 100 : 150;
+  const hint = kind === 'mow' ? grassHint(value) : kind === 'water' ? moistureHint(value) : conditionHint(value);
+  const taskProgress = active && property.task
+    ? ((Date.now() - property.task.startedAt) / (property.task.endsAt - property.task.startedAt)) * 100
+    : 0;
 
   return (
-    <Card size="sm" className={active ? 'ring-2 ring-primary/45' : ''}>
-      <CardContent className="flex h-full flex-col gap-3">
+    <Card className={active ? 'ring-2 ring-primary/45' : ''}>
+      <CardContent className="flex h-full flex-col gap-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-lg bg-secondary text-primary">
+            <span className="grid size-10 place-items-center rounded-xl bg-secondary text-primary">
               <Icon className="size-4.5" aria-hidden="true" />
             </span>
             <span>
-              <span className="block text-sm font-semibold">{TASK_LABELS[kind]}</span>
+              <span className="block font-semibold">{TASK_LABELS[kind]}</span>
               <span className="block text-[11px] text-muted-foreground">{equipment.name}</span>
             </span>
           </div>
           {(automatic || handsFree) && <Badge variant="secondary">{automatic ? 'Auto' : 'Autark'}</Badge>}
         </div>
 
-        <div className="mt-auto flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 rounded-xl bg-muted/55 p-3">
+          <GaugeRing value={value} max={max} tone={metricTone(kind, value)} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {kind === 'mow' ? 'Grasschnitt' : kind === 'water' ? 'Feuchtigkeit' : 'Gerätezustand'}
+            </p>
+            <p className="mt-1 text-sm font-semibold">{hint}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {kind === 'mow' ? 'Optimal: 60–80' : kind === 'water' ? 'Optimal: 30–85' : 'Wartung empfohlen unter 40'}
+            </p>
+          </div>
+        </div>
+
+        {active && property.task && (
+          <div className="rounded-lg bg-secondary/65 p-2.5">
+            <div className="mb-1.5 flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 font-semibold"><Timer className="size-3.5" /> Läuft</span>
+              <span className="tabular-nums text-muted-foreground">{formatDuration(property.task.endsAt - Date.now())}</span>
+            </div>
+            <Progress value={taskProgress} className="[&_[data-slot=progress-track]]:h-1.5" />
+          </div>
+        )}
+
+        <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><Timer className="size-3.5" /> {formatDuration(duration * 1_000)}</span>
-          {kind === 'mow' && <strong className="text-foreground">+{formatMoney(payout)}</strong>}
+          {kind === 'mow' && (
+            <strong className="text-emerald-700">
+              {active
+                ? `+${formatMoney(property.task?.payoutAccrued ?? 0, true)} / ${formatMoney(payout)}`
+                : `+${formatMoney(payout)}`}
+            </strong>
+          )}
           {kind === 'maintain' && <strong className="text-foreground">−{formatMoney(cost)}</strong>}
         </div>
         <Button
@@ -322,11 +419,6 @@ function PropertyDetail({
   manualBusy: boolean;
   onStart: (kind: TaskKind) => void;
 }) {
-  const task = property.task;
-  const taskProgress = task
-    ? ((Date.now() - task.startedAt) / (task.endsAt - task.startedAt)) * 100
-    : 0;
-
   return (
     <section className="min-w-0 space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1" aria-label={property.name}>
       <div className="relative min-h-44 overflow-hidden rounded-xl border border-border bg-card shadow-sm sm:min-h-52">
@@ -338,7 +430,15 @@ function PropertyDetail({
         <div className="absolute inset-0 bg-gradient-to-t from-[#17311f]/90 via-[#17311f]/20 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-4 text-white sm:p-5">
           <div>
-            <div className="mb-2 flex flex-wrap gap-2">{statusBadge(property)}</div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              {statusBadge(property)}
+              <span className="rounded-full border border-white/20 bg-black/25 px-2.5 py-1 text-xs backdrop-blur-sm">
+                Reputation beim Kunden{' '}
+                <strong className={property.satisfaction >= 75 ? 'text-emerald-200' : property.satisfaction >= 40 ? 'text-amber-200' : 'text-rose-200'}>
+                  {Math.round(property.satisfaction)} %
+                </strong>
+              </span>
+            </div>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{property.name}</h2>
             <p className="mt-1 text-sm text-white/75">
               {property.type} · {property.size.toLocaleString('de-DE')} m² · {property.subtitle}
@@ -361,29 +461,9 @@ function PropertyDetail({
         </div>
       )}
 
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Graslänge" value={property.grass} hint={grassHint(property.grass)} icon={Sprout} tone={property.grass > 80 ? 'rose' : 'green'} />
-        <Metric label="Feuchtigkeit" value={property.moisture} hint={moistureHint(property.moisture)} icon={Droplets} tone={property.moisture < 30 || property.moisture > 85 ? 'rose' : 'blue'} />
-        <Metric label="Geräte" value={property.condition} hint={conditionHint(property.condition)} icon={Wrench} tone={property.condition < 40 ? 'rose' : 'amber'} />
-        <Metric label="Zufriedenheit" value={property.satisfaction} hint={property.satisfaction > 75 ? 'Sehr zufrieden' : property.satisfaction > 40 ? 'Stabil' : 'Gefährdet'} icon={ShieldCheck} tone={property.satisfaction < 40 ? 'rose' : 'green'} />
-      </div>
-
-      {task && (
-        <div className="rounded-xl border border-primary/25 bg-secondary/65 p-3.5">
-          <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-            <span className="flex items-center gap-2 font-semibold">
-              <Timer className="size-4 text-primary" /> {TASK_LABELS[task.kind]} läuft
-              {task.automated && <Badge variant="secondary">automatisch</Badge>}
-            </span>
-            <span className="tabular-nums text-muted-foreground">{formatDuration(task.endsAt - Date.now())}</span>
-          </div>
-          <Progress value={taskProgress} className="[&_[data-slot=progress-track]]:h-2" />
-        </div>
-      )}
-
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      <div className="grid gap-2.5 md:grid-cols-3">
         {(['mow', 'water', 'maintain'] as TaskKind[]).map((kind) => (
-          <TaskCard
+          <StatActionCard
             key={kind}
             property={property}
             kind={kind}
@@ -396,7 +476,7 @@ function PropertyDetail({
   );
 }
 
-function OperationsPanel({ property, logs }: { property: GardenProperty; logs: GameLog[] }) {
+function OperationsPanel({ property }: { property: GardenProperty }) {
   return (
     <aside className="space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1" aria-label="Betriebsdetails">
       <Card size="sm">
@@ -439,22 +519,6 @@ function OperationsPanel({ property, logs }: { property: GardenProperty; logs: G
         </CardContent>
       </Card>
 
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Letzte Meldungen</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {logs.slice(0, 5).map((log) => (
-            <div key={log.id} className="flex gap-2.5 text-xs">
-              <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${log.tone === 'good' ? 'bg-emerald-500' : log.tone === 'warning' ? 'bg-amber-500' : 'bg-stone-400'}`} />
-              <span>
-                <span className="block leading-relaxed">{log.text}</span>
-                <span className="text-[10px] text-muted-foreground">{new Date(log.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-              </span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
     </aside>
   );
 }
@@ -686,10 +750,10 @@ export default function Home() {
       <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 lg:overflow-hidden lg:p-5">
         <div className="mx-auto h-full max-w-[1540px]">
           {view === 'overview' && (
-            <div className="grid gap-3 lg:h-full lg:grid-cols-[230px_minmax(0,1fr)_280px]">
+            <div className="grid gap-3 lg:h-full lg:grid-cols-[270px_minmax(0,1fr)_260px]">
               <PropertyRail properties={game.properties} selectedId={selected.id} onSelect={setSelectedId} />
               <PropertyDetail property={selected} manualBusy={manualBusy} onStart={(kind) => startTask(selected.id, kind)} />
-              <OperationsPanel property={selected} logs={game.logs} />
+              <OperationsPanel property={selected} />
             </div>
           )}
           {view === 'offers' && <OffersView game={game} onAccept={(id) => { acceptOffer(id); setView('overview'); }} onDecline={declineOffer} />}

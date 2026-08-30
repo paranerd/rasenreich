@@ -19,6 +19,8 @@ export interface PropertyTask {
   automated: boolean;
   blocksPlayer: boolean;
   cost: number;
+  payoutTotal?: number;
+  payoutAccrued?: number;
 }
 
 export interface GardenProperty {
@@ -367,15 +369,16 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
 
   if (task.kind === 'mow') {
     const grassBefore = property.grass;
-    const payout = mowingPayout(property);
+    const payout = task.payoutTotal ?? mowingPayout(property);
+    const remainingPayout = Math.max(0, payout - (task.payoutAccrued ?? 0));
     const wetFactor = property.moisture > 85 ? 2 : 1;
     const longFactor = grassBefore > 100 ? 2.2 : grassBefore > 80 ? 1.45 : 1;
     const wear = 3.2 * Math.pow(property.size / 120, 0.3) * wetFactor * longFactor;
 
-    state.money += payout;
-    state.lifetimeRevenue += payout;
-    state.sessionRevenue += payout;
-    property.lifetimeRevenue += payout;
+    state.money += remainingPayout;
+    state.lifetimeRevenue += remainingPayout;
+    state.sessionRevenue += remainingPayout;
+    property.lifetimeRevenue += remainingPayout;
     property.completedJobs += 1;
     property.grass = Math.max(12, grassBefore - 66);
     property.condition = clamp(property.condition - wear);
@@ -426,6 +429,33 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
   if (property.satisfaction > 20) property.rescueUntil = undefined;
 }
 
+function accrueMowingRevenue(
+  state: GameState,
+  property: GardenProperty,
+  intervalStart: number,
+  intervalEnd: number,
+) {
+  const task = property.task;
+  if (!task || task.kind !== 'mow') return;
+
+  const payoutTotal = task.payoutTotal ?? mowingPayout(property);
+  const duration = Math.max(1, task.endsAt - task.startedAt);
+  const effectiveEnd = Math.min(intervalEnd, task.endsAt);
+  const elapsed = clamp((effectiveEnd - task.startedAt) / duration, 0, 1);
+  const targetAccrued = payoutTotal * elapsed;
+  const alreadyAccrued = task.payoutAccrued ?? 0;
+  const increment = Math.max(0, targetAccrued - alreadyAccrued);
+
+  if (effectiveEnd > intervalStart && increment > 0) {
+    state.money += increment;
+    state.lifetimeRevenue += increment;
+    state.sessionRevenue += increment;
+    property.lifetimeRevenue += increment;
+    task.payoutTotal = payoutTotal;
+    task.payoutAccrued = targetAccrued;
+  }
+}
+
 function startAutomatedTask(state: GameState, property: GardenProperty, kind: TaskKind, at: number) {
   if (property.task) return;
   const cost = kind === 'maintain' ? maintenanceCost(property) : 0;
@@ -438,6 +468,8 @@ function startAutomatedTask(state: GameState, property: GardenProperty, kind: Ta
     automated: true,
     blocksPlayer: false,
     cost,
+    payoutTotal: kind === 'mow' ? mowingPayout(property) : undefined,
+    payoutAccrued: 0,
   };
 }
 
@@ -589,6 +621,7 @@ export function simulateGame(source: GameState, now = Date.now(), offline = fals
     if (state.weather !== 'mild' && stepEnd >= state.weatherUntil) state.weather = 'mild';
 
     state.properties.forEach((property) => {
+      accrueMowingRevenue(state, property, cursor, stepEnd);
       advanceNaturalState(state, property, seconds);
       if (property.task && property.task.endsAt <= stepEnd) completeTask(state, property, property.task.endsAt);
       tryAutomation(state, property, stepEnd);
@@ -673,6 +706,8 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
     automated,
     blocksPlayer,
     cost,
+    payoutTotal: kind === 'mow' ? mowingPayout(property) : undefined,
+    payoutAccrued: 0,
   };
   addLog(state, `${property.name}: ${TASK_LABELS[kind]} gestartet.`, 'neutral');
   return {
@@ -849,12 +884,12 @@ export function conditionHint(value: number) {
   return 'Einsatzbereit';
 }
 
-export function formatMoney(value: number) {
+export function formatMoney(value: number, showCents = false) {
   return new Intl.NumberFormat('de-DE', {
     style: 'currency',
     currency: 'EUR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: showCents ? 2 : 0,
+    maximumFractionDigits: showCents ? 2 : 0,
   }).format(value);
 }
 
