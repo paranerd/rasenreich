@@ -278,7 +278,17 @@ function AppHeader({
   );
 }
 
-const SIDE_NAV_ITEM = 'flex flex-col items-center gap-1.5 rounded-[9px] px-1 py-2.5';
+const SIDE_NAV_ITEM =
+  'group flex flex-col items-center gap-1.5 rounded-[9px] px-1 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50';
+
+/** Hintergrund, Icon- und Textfarbe eines Leisteneintrags, jeweils mit Hover-Zustand. */
+function sideNavTone(active: boolean) {
+  return {
+    surface: active ? 'bg-[#eef2e6] hover:bg-[#e2ebd4]' : 'hover:bg-[#efece1]',
+    icon: active ? 'text-[#3f6b28]' : 'text-[#a8b394] group-hover:text-ink-soft',
+    label: active ? 'text-ink' : 'text-ink-mute group-hover:text-ink',
+  };
+}
 
 /** Schmale Icon-Leiste links: Hauptnavigation und Einstellungen auf Desktop. */
 function SideNav({
@@ -305,20 +315,17 @@ function SideNav({
     >
       {nav.map(({ id, label, icon: Icon }) => {
         const active = !settingsOpen && view === id;
+        const tone = sideNavTone(active);
         return (
           <button
             key={id}
             type="button"
-            className={SIDE_NAV_ITEM}
-            style={{ background: active ? '#eef2e6' : 'transparent' }}
+            className={`${SIDE_NAV_ITEM} ${tone.surface}`}
             onClick={() => setView(id)}
             aria-current={active ? 'page' : undefined}
           >
-            <Icon className="size-[18px]" style={{ color: active ? '#3f6b28' : '#a8b394' }} aria-hidden="true" />
-            <span
-              className="text-[9.5px] font-semibold leading-none"
-              style={{ color: active ? 'var(--ink)' : 'var(--ink-mute)' }}
-            >
+            <Icon className={`size-[18px] transition-colors ${tone.icon}`} aria-hidden="true" />
+            <span className={`text-[9.5px] font-semibold leading-none transition-colors ${tone.label}`}>
               {label}
             </span>
           </button>
@@ -327,19 +334,16 @@ function SideNav({
 
       <button
         type="button"
-        className={`${SIDE_NAV_ITEM} mt-auto border-t border-border/70 pt-3.5`}
-        style={{ background: settingsOpen ? '#eef2e6' : 'transparent' }}
+        className={`${SIDE_NAV_ITEM} ${sideNavTone(settingsOpen).surface} mt-auto border-t border-border/70 pt-3.5`}
         onClick={onSettings}
         aria-current={settingsOpen ? 'page' : undefined}
       >
         <Settings2
-          className="size-[18px]"
-          style={{ color: settingsOpen ? '#3f6b28' : '#a8b394' }}
+          className={`size-[18px] transition-colors ${sideNavTone(settingsOpen).icon}`}
           aria-hidden="true"
         />
         <span
-          className="text-[9.5px] font-semibold leading-none"
-          style={{ color: settingsOpen ? 'var(--ink)' : 'var(--ink-mute)' }}
+          className={`text-[9.5px] font-semibold leading-none transition-colors ${sideNavTone(settingsOpen).label}`}
         >
           Einstellungen
         </span>
@@ -556,11 +560,10 @@ function PropertyList({
           return (
             <button
               key={property.id}
-              className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-3 text-left transition-colors"
-              style={{
-                background: selected ? '#e8efdf' : 'transparent',
-                boxShadow: selected ? 'inset 3px 0 0 var(--primary)' : 'none',
-              }}
+              className={`flex w-full items-center gap-3 border-b border-border/40 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 ${
+                selected ? 'bg-[#e8efdf] hover:bg-[#e2ebd4]' : 'hover:bg-[#f6f3ea]'
+              }`}
+              style={{ boxShadow: selected ? 'inset 3px 0 0 var(--primary)' : 'none' }}
               onClick={() => onSelect(property.id)}
               aria-current={selected ? 'true' : undefined}
             >
