@@ -354,9 +354,9 @@ export function maintenanceCost(property: GardenProperty) {
 
 export function mowingPayout(property: GardenProperty) {
   const qualityBase = property.weedControl ? 1.08 : 1;
-  if (property.grass < 60) return property.payout * (property.grass / 60) * qualityBase;
-  if (property.grass <= 80) return property.payout * 1.2 * qualityBase;
-  return property.payout * qualityBase;
+  if (property.grass < 60) return Math.round(property.payout * (property.grass / 60) * qualityBase);
+  if (property.grass <= 80) return Math.round(property.payout * 1.2 * qualityBase);
+  return Math.round(property.payout * qualityBase);
 }
 
 export function isAutomated(property: GardenProperty, kind: TaskKind) {
@@ -442,7 +442,7 @@ function accrueMowingRevenue(
   const duration = Math.max(1, task.endsAt - task.startedAt);
   const effectiveEnd = Math.min(intervalEnd, task.endsAt);
   const elapsed = clamp((effectiveEnd - task.startedAt) / duration, 0, 1);
-  const targetAccrued = payoutTotal * elapsed;
+  const targetAccrued = Math.floor(payoutTotal * elapsed);
   const alreadyAccrued = task.payoutAccrued ?? 0;
   const increment = Math.max(0, targetAccrued - alreadyAccrued);
 
@@ -609,6 +609,7 @@ function triggerEvent(state: GameState, now: number) {
 
 export function simulateGame(source: GameState, now = Date.now(), offline = false) {
   const state = clone(source);
+  state.money = Math.round(state.money);
   const previousMoney = state.money;
   const previousJobs = state.properties.reduce((sum, property) => sum + property.completedJobs, 0);
   const elapsedMs = Math.max(0, now - state.lastUpdatedAt);
@@ -884,12 +885,12 @@ export function conditionHint(value: number) {
   return 'Einsatzbereit';
 }
 
-export function formatMoney(value: number, showCents = false) {
+export function formatMoney(value: number) {
   return new Intl.NumberFormat('de-DE', {
     style: 'currency',
     currency: 'EUR',
-    minimumFractionDigits: showCents ? 2 : 0,
-    maximumFractionDigits: showCents ? 2 : 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 

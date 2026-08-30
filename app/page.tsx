@@ -12,7 +12,6 @@ import {
   CloudSun,
   Droplets,
   FlaskConical,
-  Gauge,
   Leaf,
   LayoutDashboard,
   LockKeyhole,
@@ -54,7 +53,6 @@ import {
   maintenanceCost,
   moistureHint,
   mowingPayout,
-  nextUnlockReputation,
   propertyStatus,
   TASK_LABELS,
   taskBlocksPlayer,
@@ -138,8 +136,11 @@ function GaugeRing({
   );
 }
 
-function propertyWarnings(property: GardenProperty) {
+function propertyWarnings(property: GardenProperty, unlocked: Record<TaskKind, number>) {
   const warnings: Array<{ label: string; icon: typeof CircleAlert; tone: string }> = [];
+  if ((['mow', 'water', 'maintain'] as TaskKind[]).some((kind) => property.equipment[kind] < unlocked[kind])) {
+    warnings.push({ label: 'Equipment-Upgrade verfügbar', icon: TrendingUp, tone: 'text-emerald-700 bg-emerald-100' });
+  }
   if (property.rescueUntil) warnings.push({ label: 'Vertrag akut gefährdet', icon: CircleAlert, tone: 'text-rose-700 bg-rose-100' });
   if (property.grass > 80) warnings.push({ label: 'Rasen außerhalb des optimalen Fensters', icon: Sprout, tone: 'text-amber-700 bg-amber-100' });
   if (property.moisture < 30 || property.moisture > 85) warnings.push({ label: 'Feuchtigkeit außerhalb des optimalen Bereichs', icon: Droplets, tone: 'text-sky-700 bg-sky-100' });
@@ -154,6 +155,7 @@ function AppHeader({
   money,
   reputation,
   weather,
+  manualBusy,
   onSettings,
 }: {
   view: ViewName;
@@ -161,6 +163,7 @@ function AppHeader({
   money: number;
   reputation: number;
   weather: 'mild' | 'heat' | 'rain';
+  manualBusy: boolean;
   onSettings: () => void;
 }) {
   const nav = [
@@ -212,7 +215,17 @@ function AppHeader({
           </div>
           <div className="rounded-lg bg-primary px-2.5 py-1.5 text-primary-foreground sm:min-w-28">
             <span className="hidden text-[10px] text-primary-foreground/70 sm:block">Vermögen</span>
-            <span className="block text-sm font-semibold tabular-nums">{formatMoney(money, true)}</span>
+            <span className="block text-sm font-semibold tabular-nums">{formatMoney(money)}</span>
+          </div>
+          <div
+            className={`flex h-9 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-semibold sm:px-2.5 sm:text-xs ${
+              manualBusy
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            }`}
+          >
+            <span className={`size-1.5 rounded-full ${manualBusy ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+            {manualBusy ? 'Beschäftigt' : 'Verfügbar'}
           </div>
           <Badge variant="secondary" className="hidden h-9 gap-1.5 px-3 sm:inline-flex">
             <ShieldCheck className="size-3.5" /> {Math.floor(reputation)}
@@ -228,10 +241,12 @@ function AppHeader({
 
 function PropertyRail({
   properties,
+  unlocked,
   selectedId,
   onSelect,
 }: {
   properties: GardenProperty[];
+  unlocked: Record<TaskKind, number>;
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
@@ -244,11 +259,11 @@ function PropertyRail({
         </div>
         <MapPin className="size-4 text-muted-foreground" aria-hidden="true" />
       </div>
-      <div className="w-full overflow-x-auto lg:h-[calc(100%-61px)] lg:overflow-x-hidden lg:overflow-y-auto">
-        <div className="flex gap-2 p-2 lg:flex-col">
+      <div className="w-full lg:h-[calc(100%-61px)] lg:overflow-y-auto">
+        <div className="flex flex-col gap-2 p-2">
           {properties.map((property) => {
             const selected = property.id === selectedId;
-            const warnings = propertyWarnings(property);
+            const warnings = propertyWarnings(property, unlocked);
             const miniGauges = [
               { kind: 'mow' as const, label: 'Gras', value: property.grass, max: 150, icon: Sprout },
               { kind: 'water' as const, label: 'Feuchte', value: property.moisture, max: 150, icon: Droplets },
@@ -257,7 +272,7 @@ function PropertyRail({
             return (
               <button
                 key={property.id}
-                className={`min-w-72 rounded-lg border p-3 text-left transition-colors lg:min-w-0 ${
+                className={`w-full rounded-lg border p-3 text-left transition-colors ${
                   selected
                     ? 'border-primary/30 bg-secondary shadow-sm'
                     : 'border-transparent hover:border-border hover:bg-muted/60'
@@ -286,22 +301,21 @@ function PropertyRail({
                     </span>
                   )}
                 </span>
-                <span className="mt-3 flex items-baseline justify-between border-t border-border/70 pt-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Zufriedenheit
-                  </span>
+                <span className="mt-2 flex justify-end border-t border-border/70 pt-2">
                   <span className={`text-sm font-bold tabular-nums ${satisfactionClass(property.satisfaction)}`}>
                     {Math.round(property.satisfaction)} %
                   </span>
                 </span>
-                <span className="mt-2 grid grid-cols-3 gap-1.5">
+                <span className="mt-2 grid grid-cols-3 gap-1.5" aria-label="Grundstückswerte">
                   {miniGauges.map(({ kind, label, value, max, icon: Icon }) => (
-                    <span key={kind} className="flex items-center gap-1 rounded-md bg-card/75 px-1.5 py-1.5">
+                    <span
+                      key={kind}
+                      className="flex items-center justify-center gap-1.5 rounded-md bg-card/75 px-1.5 py-1.5"
+                      title={`${label}: ${Math.round(value)}`}
+                      aria-label={`${label}: ${Math.round(value)}`}
+                    >
+                      <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
                       <GaugeRing value={value} max={max} tone={metricTone(kind, value)} size="small" />
-                      <span className="min-w-0">
-                        <Icon className="mb-0.5 size-3 text-muted-foreground" aria-hidden="true" />
-                        <span className="block truncate text-[9px] text-muted-foreground">{label}</span>
-                      </span>
                     </span>
                   ))}
                 </span>
@@ -390,7 +404,7 @@ function StatActionCard({
           {kind === 'mow' && (
             <strong className="text-emerald-700">
               {active
-                ? `+${formatMoney(property.task?.payoutAccrued ?? 0, true)} / ${formatMoney(payout)}`
+                ? `+${formatMoney(property.task?.payoutAccrued ?? 0)} / ${formatMoney(payout)}`
                 : `+${formatMoney(payout)}`}
             </strong>
           )}
@@ -476,7 +490,17 @@ function PropertyDetail({
   );
 }
 
-function OperationsPanel({ property }: { property: GardenProperty }) {
+function OperationsPanel({
+  property,
+  unlocked,
+  money,
+  onInstall,
+}: {
+  property: GardenProperty;
+  unlocked: Record<TaskKind, number>;
+  money: number;
+  onInstall: (kind: TaskKind) => void;
+}) {
   return (
     <aside className="space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1" aria-label="Betriebsdetails">
       <Card size="sm">
@@ -505,14 +529,30 @@ function OperationsPanel({ property }: { property: GardenProperty }) {
           {(['mow', 'water', 'maintain'] as TaskKind[]).map((kind) => {
             const Icon = taskIcons[kind];
             const equipment = EQUIPMENT[kind][property.equipment[kind]];
+            const nextLevel = property.equipment[kind] + 1;
+            const upgrade = nextLevel <= unlocked[kind] ? EQUIPMENT[kind][nextLevel] : undefined;
             return (
-              <div key={kind} className="flex items-center gap-2.5 rounded-lg border border-border p-2.5">
-                <span className="grid size-8 place-items-center rounded-lg bg-secondary text-primary"><Icon className="size-4" /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs text-muted-foreground">{TASK_LABELS[kind]}</span>
-                  <span className="block truncate text-sm font-medium">{equipment.name}</span>
-                </span>
-                {equipment.automated && <Badge variant="secondary">Auto</Badge>}
+              <div key={kind} className="rounded-lg border border-border p-2.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid size-8 place-items-center rounded-lg bg-secondary text-primary"><Icon className="size-4" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs text-muted-foreground">{TASK_LABELS[kind]}</span>
+                    <span className="block truncate text-sm font-medium">{equipment.name}</span>
+                  </span>
+                  {equipment.automated && <Badge variant="secondary">Auto</Badge>}
+                </div>
+                {upgrade && (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="mt-2.5 w-full justify-between"
+                    disabled={money < upgrade.installCost}
+                    onClick={() => onInstall(kind)}
+                  >
+                    <span className="truncate">Upgrade: {upgrade.name}</span>
+                    <span>{formatMoney(upgrade.installCost)}</span>
+                  </Button>
+                )}
               </div>
             );
           })}
@@ -520,6 +560,60 @@ function OperationsPanel({ property }: { property: GardenProperty }) {
       </Card>
 
     </aside>
+  );
+}
+
+function MobilePropertySheet({
+  open,
+  property,
+  manualBusy,
+  unlocked,
+  money,
+  onClose,
+  onStart,
+  onInstall,
+}: {
+  open: boolean;
+  property: GardenProperty;
+  manualBusy: boolean;
+  unlocked: Record<TaskKind, number>;
+  money: number;
+  onClose: () => void;
+  onStart: (kind: TaskKind) => void;
+  onInstall: (kind: TaskKind) => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 lg:hidden" role="presentation">
+      <button
+        className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+        aria-label="Grundstücksdetails schließen"
+        onClick={onClose}
+      />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Details für ${property.name}`}
+        className="absolute inset-x-0 bottom-0 max-h-[92dvh] animate-in overflow-y-auto rounded-t-3xl bg-background p-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl slide-in-from-bottom duration-200"
+      >
+        <div className="sticky top-0 z-10 mb-3 flex items-center justify-between rounded-2xl bg-background/95 px-1 py-1 backdrop-blur">
+          <span className="ml-auto mr-auto h-1.5 w-12 rounded-full bg-border" />
+          <Button variant="outline" size="icon-sm" aria-label="Schließen" onClick={onClose}>
+            <X />
+          </Button>
+        </div>
+        <div className="space-y-3">
+          <PropertyDetail property={property} manualBusy={manualBusy} onStart={onStart} />
+          <OperationsPanel
+            property={property}
+            unlocked={unlocked}
+            money={money}
+            onInstall={onInstall}
+          />
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -706,12 +800,18 @@ export default function Home() {
   const [view, setView] = useState<ViewName>('overview');
   const [selectedId, setSelectedId] = useState('bergmann');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   useEffect(() => {
     if (game && !game.properties.some((property) => property.id === selectedId)) {
       setSelectedId(game.properties[0]?.id ?? 'bergmann');
+      setMobileDetailOpen(false);
     }
   }, [game, selectedId]);
+
+  useEffect(() => {
+    if (view !== 'overview') setMobileDetailOpen(false);
+  }, [view]);
 
   const selected = useMemo(
     () => game?.properties.find((property) => property.id === selectedId) ?? game?.properties[0],
@@ -730,12 +830,17 @@ export default function Home() {
   }
 
   const manualBusy = game.properties.some((property) => property.task && taskBlocksPlayer(property.task));
-  const nextRep = nextUnlockReputation(game.reputation);
-  const repProgress = (game.reputation / nextRep) * 100;
-
   return (
     <main className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden">
-      <AppHeader view={view} setView={setView} money={game.money} reputation={game.reputation} weather={game.weather} onSettings={() => setSettingsOpen(true)} />
+      <AppHeader
+        view={view}
+        setView={setView}
+        money={game.money}
+        reputation={game.reputation}
+        weather={game.weather}
+        manualBusy={manualBusy}
+        onSettings={() => setSettingsOpen(true)}
+      />
 
       {game.activeEvent && (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 text-amber-950">
@@ -751,9 +856,24 @@ export default function Home() {
         <div className="mx-auto h-full max-w-[1540px]">
           {view === 'overview' && (
             <div className="grid gap-3 lg:h-full lg:grid-cols-[270px_minmax(0,1fr)_260px]">
-              <PropertyRail properties={game.properties} selectedId={selected.id} onSelect={setSelectedId} />
-              <PropertyDetail property={selected} manualBusy={manualBusy} onStart={(kind) => startTask(selected.id, kind)} />
-              <OperationsPanel property={selected} />
+              <PropertyRail
+                properties={game.properties}
+                unlocked={game.unlocked}
+                selectedId={selected.id}
+                onSelect={(id) => {
+                  setSelectedId(id);
+                  setMobileDetailOpen(true);
+                }}
+              />
+              <div className="hidden min-h-0 lg:contents">
+                <PropertyDetail property={selected} manualBusy={manualBusy} onStart={(kind) => startTask(selected.id, kind)} />
+                <OperationsPanel
+                  property={selected}
+                  unlocked={game.unlocked}
+                  money={game.money}
+                  onInstall={(kind) => installEquipment(selected.id, kind)}
+                />
+              </div>
             </div>
           )}
           {view === 'offers' && <OffersView game={game} onAccept={(id) => { acceptOffer(id); setView('overview'); }} onDecline={declineOffer} />}
@@ -770,11 +890,16 @@ export default function Home() {
         </div>
       </div>
 
-      <footer className="hidden shrink-0 items-center justify-between border-t border-border bg-card px-5 py-2 text-xs text-muted-foreground lg:flex">
-        <span className="flex items-center gap-1.5"><Gauge className="size-3.5" /> {manualBusy ? 'Du bist gerade im Einsatz.' : 'Du bist für eine manuelle Aufgabe verfügbar.'}</span>
-        <span className="flex items-center gap-2">Nächster Meilenstein: Reputation {nextRep}<span className="h-1.5 w-24 overflow-hidden rounded-full bg-muted"><span className="block h-full bg-primary" style={{ width: `${Math.min(100, repProgress)}%` }} /></span></span>
-        <span>Automatisch lokal gespeichert</span>
-      </footer>
+      <MobilePropertySheet
+        open={mobileDetailOpen && view === 'overview'}
+        property={selected}
+        manualBusy={manualBusy}
+        unlocked={game.unlocked}
+        money={game.money}
+        onClose={() => setMobileDetailOpen(false)}
+        onStart={(kind) => startTask(selected.id, kind)}
+        onInstall={(kind) => installEquipment(selected.id, kind)}
+      />
 
       {notice && (
         <output aria-live="polite" className="fixed bottom-4 left-1/2 z-50 flex w-[min(440px,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-foreground px-4 py-3 text-sm text-background shadow-xl">
