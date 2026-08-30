@@ -226,6 +226,13 @@ export const TASK_LABELS: Record<TaskKind, string> = {
   maintain: 'Wartung',
 };
 
+/** Verben für Schaltflächen und laufende Arbeiten — TASK_LABELS benennt dagegen den Zustand. */
+export const ACTION_LABELS: Record<TaskKind, string> = {
+  mow: 'Mähen',
+  water: 'Bewässern',
+  maintain: 'Reparieren',
+};
+
 const OFFER_TEMPLATES = [
   {
     minRep: 2,
@@ -915,141 +922,4 @@ export function humanOfflineDuration(milliseconds: number) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} Std. ${minutes % 60} Min.`;
   return `${Math.floor(hours / 24)} Tage ${hours % 24} Std.`;
-}
-
-export interface ForecastEntry {
-  id: string;
-  when: string;
-  text: string;
-  tone: 'warn' | 'bad' | 'flat';
-}
-
-const FORECAST_HORIZON_MINUTES = 60 * 24;
-
-function minutesUntil(current: number, target: number, ratePerMinute: number) {
-  if (ratePerMinute === 0) return undefined;
-  const minutes = (target - current) / ratePerMinute;
-  if (minutes < 0 || minutes > FORECAST_HORIZON_MINUTES) return undefined;
-  return minutes;
-}
-
-function formatLead(minutes: number) {
-  if (minutes < 1) return 'gleich';
-  if (minutes < 60) return `in ${Math.round(minutes)} Min.`;
-  const hours = minutes / 60;
-  if (hours < 24) return `in ${Math.round(hours)} Std.`;
-  return `in ${Math.round(hours / 24)} Tagen`;
-}
-
-/**
- * Was passiert, wenn der Spieler nichts tut. Leitet sich aus denselben Raten ab,
- * mit denen advanceNaturalState rechnet, damit Vorhersage und Verlauf zusammenpassen.
- */
-export function propertyForecast(state: GameState, property: GardenProperty): ForecastEntry[] {
-  const entries: ForecastEntry[] = [];
-  const fertilizer = property.fertilizer ? 1.5 : 1;
-  const fertilizerWater = property.fertilizer ? 1.3 : 1;
-  const moistureGrowth = property.moisture < 50 ? 0.5 : property.moisture > 110 ? 0.72 : 1;
-  const heatWater = state.weather === 'heat' ? 1.75 : 1;
-  const rainGain = state.weather === 'rain' ? 1.35 : 0;
-
-  const grassRate = 1.25 * property.growthFactor * fertilizer * moistureGrowth;
-  const moistureRate = -0.82 * property.drainage * fertilizerWater * heatWater + rainGain;
-
-  if (property.grass > 100) {
-    entries.push({
-      id: 'grass-wild',
-      when: 'jetzt',
-      text: 'Der Rasen ist verwildert: doppelte Mähdauer, dreifacher Zufriedenheitsverlust.',
-      tone: 'bad',
-    });
-  } else if (property.grass > 80) {
-    const lead = minutesUntil(property.grass, 100, grassRate);
-    if (lead !== undefined) {
-      entries.push({
-        id: 'grass-wild-soon',
-        when: formatLead(lead),
-        text: 'Der Rasen verwildert — doppelte Mähdauer und dreifacher Zufriedenheitsverlust.',
-        tone: 'bad',
-      });
-    }
-  } else {
-    const lead = minutesUntil(property.grass, 80, grassRate);
-    if (lead !== undefined) {
-      entries.push({
-        id: 'grass-long',
-        when: formatLead(lead),
-        text: 'Der Rasen wird zu lang: gleiches Geld, aber +50 % Mähdauer und die Zufriedenheit fällt.',
-        tone: 'warn',
-      });
-    }
-  }
-
-  if (moistureRate >= 0) {
-    if (rainGain > 0) {
-      entries.push({
-        id: 'water-rain',
-        when: 'läuft',
-        text: 'Der Regen übernimmt die Bewässerung.',
-        tone: 'flat',
-      });
-    }
-  } else if (property.moisture <= 25) {
-    entries.push({
-      id: 'water-dried',
-      when: 'jetzt',
-      text: 'Der Boden ist vertrocknet: Wachstum halbiert, die Zufriedenheit sinkt laufend.',
-      tone: 'bad',
-    });
-  } else if (property.moisture <= 50) {
-    const lead = minutesUntil(property.moisture, 25, moistureRate);
-    if (lead !== undefined) {
-      entries.push({
-        id: 'water-dry-soon',
-        when: formatLead(lead),
-        text: 'Der Boden vertrocknet — das Wachstum halbiert sich.',
-        tone: 'bad',
-      });
-    }
-  } else {
-    const lead = minutesUntil(property.moisture, 50, moistureRate);
-    if (lead !== undefined) {
-      entries.push({
-        id: 'water-low',
-        when: formatLead(lead),
-        text: 'Die Bewässerung fällt unter den guten Bereich, die Zufriedenheit sinkt.',
-        tone: 'warn',
-      });
-    }
-  }
-
-  const wetFactor = property.moisture > 100 ? 2 : 1;
-  const longFactor = property.grass > 100 ? 2.2 : property.grass > 80 ? 1.45 : 1;
-  const wearPerMow = 3.2 * Math.pow(property.size / 120, 0.3) * wetFactor * longFactor;
-
-  if (property.condition < 20) {
-    entries.push({
-      id: 'cond-critical',
-      when: 'jetzt',
-      text: 'Die Geräte können bei jedem Einsatz ausfallen.',
-      tone: 'bad',
-    });
-  } else if (property.condition < 50) {
-    entries.push({
-      id: 'cond-risk',
-      when: 'jetzt',
-      text: 'Erhöhtes Ausfallrisiko — eine Wartung senkt es sofort.',
-      tone: 'warn',
-    });
-  } else {
-    const mows = Math.floor((property.condition - 50) / wearPerMow);
-    entries.push({
-      id: 'cond-mows',
-      when: `noch ${mows} ${mows === 1 ? 'Schnitt' : 'Schnitte'}`,
-      text: 'bis die Geräte ins erhöhte Ausfallrisiko rutschen.',
-      tone: mows <= 2 ? 'warn' : 'flat',
-    });
-  }
-
-  return entries.slice(0, 3);
 }

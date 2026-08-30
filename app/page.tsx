@@ -26,8 +26,8 @@ import { Gauge } from '@/components/gauge';
 import { Button } from '@/components/ui/button';
 import { useGame } from '@/hooks/use-game';
 import {
+  ACTION_LABELS,
   EQUIPMENT,
-  ForecastEntry,
   formatDuration,
   formatMoney,
   GardenProperty,
@@ -37,7 +37,6 @@ import {
   maintenanceCost,
   mowingPayout,
   nextUnlockReputation,
-  propertyForecast,
   propertyMetricPercent,
   propertyStatus,
   TASK_LABELS,
@@ -135,8 +134,12 @@ function StatusDot({ property }: { property: GardenProperty }) {
   );
 }
 
+function weatherLabel(weather: 'mild' | 'heat' | 'rain') {
+  return weather === 'heat' ? 'Hitzewelle' : weather === 'rain' ? 'Regenschauer' : 'Mildes Wetter';
+}
+
 function WeatherBadge({ weather, className }: { weather: 'mild' | 'heat' | 'rain'; className?: string }) {
-  const label = weather === 'heat' ? 'Hitzewelle' : weather === 'rain' ? 'Regenschauer' : 'Mildes Wetter';
+  const label = weatherLabel(weather);
   const Icon = weather === 'rain' ? CloudRain : weather === 'heat' ? Sun : CloudSun;
   const color =
     weather === 'heat' ? 'var(--tone-warn)' : weather === 'rain' ? 'var(--kind-water)' : 'var(--ink-mute)';
@@ -147,134 +150,181 @@ function WeatherBadge({ weather, className }: { weather: 'mild' | 'heat' | 'rain
   );
 }
 
+/** Gleicher Aufbau für alle Kopfkacheln: Titel oben links, Wert darunter. */
+const HEADER_TILE = 'flex h-[60px] shrink-0 flex-col justify-center gap-1.5 rounded-[9px] border px-3.5';
+
+/** Reputation als anteilig gefüllter Ring — eigene Farbe, damit sie kein Grundstückswert ist. */
+function ReputationRing({ reputation }: { reputation: number }) {
+  const next = nextUnlockReputation(reputation);
+  const percent = Math.min(100, Math.max(0, (reputation / next) * 100));
+  const circumference = 2 * Math.PI * 12;
+
+  return (
+    <span
+      className="relative grid size-[30px] shrink-0 place-items-center"
+      title={`Reputation ${Math.floor(reputation)} — nächste Freischaltung bei ${next}`}
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={next}
+      aria-valuenow={Math.floor(reputation)}
+      aria-label={`Reputation ${Math.floor(reputation)} von ${next}`}
+    >
+      <svg width="30" height="30" viewBox="0 0 30 30" className="absolute inset-0 -rotate-90" aria-hidden="true">
+        <circle cx="15" cy="15" r="12" fill="none" stroke="var(--track)" strokeWidth="3.5" />
+        <circle
+          cx="15"
+          cy="15"
+          r="12"
+          fill="none"
+          stroke="var(--rep)"
+          strokeWidth="3.5"
+          strokeLinecap="butt"
+          strokeDasharray={`${(circumference * percent) / 100} ${circumference}`}
+        />
+      </svg>
+      <span
+        className="relative font-mono text-[11px] font-semibold leading-none tabular-nums"
+        style={{ color: 'var(--rep)' }}
+      >
+        {Math.floor(reputation)}
+      </span>
+    </span>
+  );
+}
+
 function AppHeader({
-  view,
-  setView,
   money,
   reputation,
   weather,
   activeProperty,
   onActiveProperty,
+  onHome,
   onSettings,
 }: {
-  view: ViewName;
-  setView: (view: ViewName) => void;
   money: number;
   reputation: number;
   weather: 'mild' | 'heat' | 'rain';
   activeProperty?: GardenProperty;
   onActiveProperty: () => void;
+  onHome: () => void;
   onSettings: () => void;
 }) {
-  const nav = [
-    { id: 'overview' as const, label: 'Betrieb', icon: LayoutDashboard },
-    { id: 'offers' as const, label: 'Angebote', icon: BriefcaseBusiness },
-    { id: 'upgrades' as const, label: 'Technik', icon: ShoppingBag },
-  ];
-  const busy = Boolean(activeProperty?.task);
   const task = activeProperty?.task;
-  const progress = task
-    ? Math.min(100, Math.max(0, ((Date.now() - task.startedAt) / (task.endsAt - task.startedAt)) * 100))
-    : 0;
-  const nextRep = nextUnlockReputation(reputation);
-  const repPercent = Math.min(100, (reputation / nextRep) * 100);
+  const busy = Boolean(task);
 
   return (
     <header className="hidden shrink-0 border-b border-border bg-paper lg:block">
-      <div className="mx-auto flex max-w-[1540px] items-center gap-5 px-5 py-2.5">
+      <div className="mx-auto flex max-w-[1540px] items-center gap-2.5 px-5 py-2.5">
         <button
           className="flex shrink-0 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onClick={() => setView('overview')}
+          onClick={onHome}
         >
           <span className="size-[26px] shrink-0 rounded-[5px]" style={{ background: LOGO_STRIPES }} />
-          <span className="flex flex-col gap-px">
-            <span className="text-[13px] font-bold leading-none tracking-[0.14em] text-ink">
-              GARDEN GRINDER
-            </span>
-            <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium leading-none tracking-[0.06em] text-ink-mute">
-              <WeatherBadge weather={weather} className="[&_svg]:size-3" />
-              {weather === 'heat' ? 'Hitzewelle' : weather === 'rain' ? 'Regenschauer' : 'Mildes Wetter'}
-            </span>
-          </span>
+          <span className="text-[13px] font-bold leading-none tracking-[0.14em] text-ink">GARDEN GRINDER</span>
         </button>
 
-        <nav className="flex flex-1 items-center justify-center gap-1" aria-label="Hauptnavigation">
-          {nav.map(({ id, label, icon: Icon }) => (
-            <Button
-              key={id}
-              variant={view === id ? 'secondary' : 'ghost'}
-              size="sm"
-              className="px-3"
-              onClick={() => setView(id)}
-              aria-current={view === id ? 'page' : undefined}
-            >
-              <Icon />
-              <span>{label}</span>
-            </Button>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex min-w-0 items-center gap-3">
-          <div
-            className="flex flex-col gap-1 rounded-[9px] border px-4 py-1.5"
-            style={{ background: '#eef2e6', borderColor: 'rgba(79,122,47,.28)' }}
-          >
+        <div className="ml-auto flex items-center gap-2.5">
+          <div className={HEADER_TILE} style={{ background: '#eef2e6', borderColor: 'rgba(79,122,47,.28)' }}>
             <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Vermögen</span>
-            <span className="font-mono text-[26px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
+            <span className="font-mono text-[22px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
               {formatMoney(money)}
             </span>
           </div>
 
-          <div className="hidden items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-1.5 xl:flex">
-            <span className="rr-label text-[9px] leading-none tracking-[0.1em]">Reputation</span>
-            <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-track">
-              <span className="absolute inset-y-0 left-0 bg-tone-ok" style={{ width: `${repPercent}%` }} />
-            </span>
-            <span className="font-mono text-xs font-semibold leading-none text-ink tabular-nums">
-              {Math.floor(reputation)}
-            </span>
+          <div className={`${HEADER_TILE} border-border bg-surface`}>
+            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Reputation</span>
+            <ReputationRing reputation={reputation} />
           </div>
 
           <button
             type="button"
-            className="flex items-center gap-2.5 rounded-lg border px-3 py-1.5 text-left disabled:cursor-default"
+            className={`${HEADER_TILE} items-start text-left disabled:cursor-default`}
             style={{
               background: busy ? '#e8efdf' : 'var(--surface)',
-              borderColor: busy ? 'rgba(79,122,47,.35)' : 'rgba(36,41,31,.07)',
+              borderColor: busy ? 'rgba(79,122,47,.35)' : 'var(--border)',
             }}
             disabled={!busy}
             onClick={onActiveProperty}
             title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
           >
-            <span
-              className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
-              style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
-              aria-hidden="true"
-            />
-            <span className="flex min-w-[150px] flex-col gap-[3px]">
-              <span className="truncate text-[11px] font-semibold leading-none text-ink">
-                {busy && task ? `${TASK_LABELS[task.kind]} · ${activeProperty?.name}` : 'Frei — nichts läuft'}
+            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Status</span>
+            <span className="flex items-center gap-2">
+              <span
+                className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
+                style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
+                aria-hidden="true"
+              />
+              <span className="whitespace-nowrap text-[13px] font-semibold leading-none text-ink">
+                {busy ? 'Beschäftigt' : 'Verfügbar'}
               </span>
-              {busy && (
-                <span className="relative h-1 overflow-hidden rounded-sm" style={{ background: 'rgba(36,41,31,.1)' }}>
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-sm transition-[width] duration-1000"
-                    style={{ width: `${progress}%`, background: '#4f7a2f' }}
-                  />
+              {task && (
+                <span className="whitespace-nowrap font-mono text-[13px] font-semibold leading-none text-ink-soft tabular-nums">
+                  {formatDuration(task.endsAt - Date.now())}
                 </span>
               )}
             </span>
-            <span className="font-mono text-[11px] font-semibold leading-none text-ink-soft tabular-nums">
-              {busy && task ? formatDuration(task.endsAt - Date.now()) : '—'}
-            </span>
           </button>
 
-          <Button variant="outline" size="icon" aria-label="Einstellungen" onClick={onSettings}>
+          <div className={`${HEADER_TILE} border-border bg-surface`}>
+            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Wetter</span>
+            <span className="flex items-center gap-2">
+              <WeatherBadge weather={weather} className="shrink-0" />
+              <span className="whitespace-nowrap text-[13px] font-semibold leading-none text-ink">
+                {weatherLabel(weather)}
+              </span>
+            </span>
+          </div>
+
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-[60px] w-11 shrink-0 rounded-[9px]"
+            aria-label="Einstellungen"
+            onClick={onSettings}
+          >
             <Settings2 />
           </Button>
         </div>
       </div>
     </header>
+  );
+}
+
+/** Schmale Icon-Leiste links: die Hauptnavigation auf Desktop. */
+function SideNav({ view, setView }: { view: ViewName; setView: (view: ViewName) => void }) {
+  const nav = [
+    { id: 'overview' as const, label: 'Betrieb', icon: LayoutDashboard },
+    { id: 'offers' as const, label: 'Angebote', icon: BriefcaseBusiness },
+    { id: 'upgrades' as const, label: 'Technik', icon: ShoppingBag },
+  ];
+
+  return (
+    <nav
+      className="hidden w-[68px] shrink-0 flex-col gap-1 border-r border-border bg-paper p-2 lg:flex"
+      aria-label="Hauptnavigation"
+    >
+      {nav.map(({ id, label, icon: Icon }) => {
+        const active = view === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            className="flex flex-col items-center gap-1.5 rounded-[9px] px-1 py-2.5"
+            style={{ background: active ? '#eef2e6' : 'transparent' }}
+            onClick={() => setView(id)}
+            aria-current={active ? 'page' : undefined}
+          >
+            <Icon className="size-[18px]" style={{ color: active ? '#3f6b28' : '#a8b394' }} aria-hidden="true" />
+            <span
+              className="text-[9.5px] font-semibold leading-none"
+              style={{ color: active ? 'var(--ink)' : 'var(--ink-mute)' }}
+            >
+              {label}
+            </span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -344,7 +394,7 @@ function BusyBanner({ property, onOpen }: { property: GardenProperty; onOpen: ()
     >
       <span className="rr-pulse size-2 shrink-0 rounded-full" style={{ background: '#4f7a2f' }} aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate text-xs font-semibold leading-none text-ink">
-        {TASK_LABELS[task.kind]} · {property.name}
+        {ACTION_LABELS[task.kind]} · {property.name}
       </span>
       <span className="font-mono text-xs font-semibold leading-none" style={{ color: '#3f6b28' }}>
         {formatDuration(task.endsAt - Date.now())}
@@ -573,7 +623,7 @@ function PropertyRail({
 /** Kopfkachel der Detailseite — die Illustration trägt sie als Hintergrund. */
 function DetailHeader({ property }: { property: GardenProperty }) {
   return (
-    <div className="relative shrink-0 overflow-hidden rounded-xl border border-border">
+    <div className="relative min-h-[164px] overflow-hidden rounded-xl border border-border lg:flex-1">
       <img
         src="/assets/garden-dashboard.png"
         alt=""
@@ -588,7 +638,8 @@ function DetailHeader({ property }: { property: GardenProperty }) {
         }}
         aria-hidden="true"
       />
-      <div className="relative flex items-start gap-4 p-4 sm:gap-5 sm:p-5">
+      <div className="relative flex h-full flex-col justify-end p-4 sm:p-5">
+        <div className="flex items-start gap-4 sm:gap-5">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <span
             className="font-mono text-[10px] font-medium uppercase leading-none tracking-[0.12em]"
@@ -627,6 +678,7 @@ function DetailHeader({ property }: { property: GardenProperty }) {
             {Math.round(property.satisfaction)} %
           </span>
         </div>
+        </div>
       </div>
     </div>
   );
@@ -641,34 +693,6 @@ function SectionLabel({ children, trailing }: { children: React.ReactNode; trail
           {trailing}
         </span>
       )}
-    </div>
-  );
-}
-
-function ForecastList({ entries }: { entries: ForecastEntry[] }) {
-  return (
-    <div className="flex flex-col gap-2.5">
-      {entries.map((entry) => (
-        <div
-          key={entry.id}
-          className="grid grid-cols-[74px_1fr] items-baseline gap-3 sm:grid-cols-[96px_1fr] sm:gap-3.5"
-        >
-          <span
-            className="font-mono text-[10.5px] font-semibold leading-snug tracking-[0.04em]"
-            style={{
-              color:
-                entry.tone === 'bad'
-                  ? 'var(--tone-bad)'
-                  : entry.tone === 'warn'
-                    ? 'var(--tone-warn)'
-                    : 'var(--ink-mute)',
-            }}
-          >
-            {entry.when}
-          </span>
-          <span className="text-[12.5px] leading-snug text-ink-soft">{entry.text}</span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -721,7 +745,7 @@ function ActionButtons({
             <span className={compact ? 'whitespace-nowrap' : 'text-[13px] font-semibold leading-none'}>
               {compact && active && property.task
                 ? formatDuration(property.task.endsAt - Date.now())
-                : TASK_LABELS[kind]}
+                : ACTION_LABELS[kind]}
             </span>
             {!compact && (
               <span
@@ -852,7 +876,6 @@ function PropertyDetail({
   onUnlock: (kind: TaskKind) => void;
   onInstall: (kind: TaskKind) => void;
 }) {
-  const forecast = useMemo(() => propertyForecast(game, property), [game, property]);
   const task = property.task;
   const progress = task
     ? Math.min(100, Math.max(0, ((Date.now() - task.startedAt) / (task.endsAt - task.startedAt)) * 100))
@@ -860,7 +883,7 @@ function PropertyDetail({
 
   return (
     <section
-      className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:p-[22px_26px]"
+      className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:overflow-hidden lg:p-[22px_26px]"
       aria-label={property.name}
     >
       <DetailHeader property={property} />
@@ -880,7 +903,7 @@ function PropertyDetail({
         </div>
       )}
 
-      <div className="flex shrink-0 flex-col gap-3.5 rounded-xl border border-border bg-paper p-4 sm:p-5">
+      <div className="flex shrink-0 flex-col gap-3.5 rounded-xl border border-border bg-paper p-4 sm:p-5 lg:shrink lg:overflow-y-auto">
         <div className="flex flex-col gap-3.5">
           <SectionLabel>Werte</SectionLabel>
           {/* Mobil Balken, ab Desktop Ringe — so wie 3a gegenüber 3b */}
@@ -898,13 +921,6 @@ function PropertyDetail({
           </div>
         </div>
 
-        {forecast.length > 0 && (
-          <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
-            <SectionLabel>Wenn du nichts tust</SectionLabel>
-            <ForecastList entries={forecast} />
-          </div>
-        )}
-
         <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
           <SectionLabel trailing={payoutHint(property)}>Aktion</SectionLabel>
           {task && (
@@ -916,16 +932,11 @@ function PropertyDetail({
                 />
               </span>
               <span className="font-mono text-[11px] font-semibold leading-none text-ink-soft tabular-nums">
-                {TASK_LABELS[task.kind]} · {formatDuration(task.endsAt - Date.now())}
+                {ACTION_LABELS[task.kind]} · {formatDuration(task.endsAt - Date.now())}
               </span>
             </div>
           )}
           <ActionButtons property={property} manualBusy={manualBusy} onStart={onStart} />
-          <p className="text-[12px] leading-snug text-ink-soft">
-            Auszahlung{' '}
-            <strong className="font-mono font-semibold text-ink">{formatMoney(mowingPayout(property))}</strong> bei
-            sofortigem Schnitt. Im Fenster zwischen 60 und 80 gibt es 20 % Qualitätsbonus.
-          </p>
         </div>
 
         <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
@@ -1040,9 +1051,6 @@ function OffersView({
         <div className="flex flex-col gap-1.5">
           <span className="rr-label text-[9.5px] leading-none">Neue Stammkunden</span>
           <h2 className="text-[27px] font-bold leading-tight text-ink">Vertragsangebote</h2>
-          <p className="text-[12.5px] text-ink-soft">
-            Wachse in deinem Tempo. Es gibt kein künstliches Vertragslimit.
-          </p>
         </div>
         <span className="flex items-center gap-2 rounded-lg border border-border bg-paper px-3 py-2 font-mono text-[10.5px] font-medium leading-none text-ink-soft">
           <Timer className="size-3.5" aria-hidden="true" /> Nächste Prüfung in {formatDuration(wait)}
@@ -1371,13 +1379,12 @@ export default function Home() {
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-surface text-ink">
       <AppHeader
-        view={view}
-        setView={setView}
         money={game.money}
         reputation={game.reputation}
         weather={game.weather}
         activeProperty={activeProperty}
         onActiveProperty={jumpToActive}
+        onHome={() => setView('overview')}
         onSettings={() => setSettingsOpen(true)}
       />
       <MobileHeader
@@ -1405,7 +1412,9 @@ export default function Home() {
         <BusyBanner property={activeProperty} onOpen={jumpToActive} />
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <SideNav view={view} setView={setView} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === 'overview' && (
           <>
             {/* Desktop: Liste links, Detail rechts (Entwurf 3b) */}
@@ -1470,6 +1479,7 @@ export default function Home() {
             />
           </div>
         )}
+        </div>
       </div>
 
       <MobileTabBar
