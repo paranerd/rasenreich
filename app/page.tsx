@@ -199,7 +199,6 @@ function AppHeader({
   activeProperty,
   onActiveProperty,
   onHome,
-  onSettings,
 }: {
   money: number;
   reputation: number;
@@ -207,7 +206,6 @@ function AppHeader({
   activeProperty?: GardenProperty;
   onActiveProperty: () => void;
   onHome: () => void;
-  onSettings: () => void;
 }) {
   const task = activeProperty?.task;
   const busy = Boolean(task);
@@ -274,24 +272,26 @@ function AppHeader({
               </span>
             </span>
           </div>
-
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-[60px] w-11 shrink-0 rounded-[9px]"
-            aria-label="Einstellungen"
-            onClick={onSettings}
-          >
-            <Settings2 />
-          </Button>
         </div>
       </div>
     </header>
   );
 }
 
-/** Schmale Icon-Leiste links: die Hauptnavigation auf Desktop. */
-function SideNav({ view, setView }: { view: ViewName; setView: (view: ViewName) => void }) {
+const SIDE_NAV_ITEM = 'flex flex-col items-center gap-1.5 rounded-[9px] px-1 py-2.5';
+
+/** Schmale Icon-Leiste links: Hauptnavigation und Einstellungen auf Desktop. */
+function SideNav({
+  view,
+  setView,
+  settingsOpen,
+  onSettings,
+}: {
+  view: ViewName;
+  setView: (view: ViewName) => void;
+  settingsOpen: boolean;
+  onSettings: () => void;
+}) {
   const nav = [
     { id: 'overview' as const, label: 'Betrieb', icon: LayoutDashboard },
     { id: 'offers' as const, label: 'Angebote', icon: BriefcaseBusiness },
@@ -300,16 +300,16 @@ function SideNav({ view, setView }: { view: ViewName; setView: (view: ViewName) 
 
   return (
     <nav
-      className="hidden w-[68px] shrink-0 flex-col gap-1 border-r border-border bg-paper p-2 lg:flex"
+      className="hidden w-20 shrink-0 flex-col gap-1 border-r border-border bg-paper p-2 lg:flex"
       aria-label="Hauptnavigation"
     >
       {nav.map(({ id, label, icon: Icon }) => {
-        const active = view === id;
+        const active = !settingsOpen && view === id;
         return (
           <button
             key={id}
             type="button"
-            className="flex flex-col items-center gap-1.5 rounded-[9px] px-1 py-2.5"
+            className={SIDE_NAV_ITEM}
             style={{ background: active ? '#eef2e6' : 'transparent' }}
             onClick={() => setView(id)}
             aria-current={active ? 'page' : undefined}
@@ -324,6 +324,26 @@ function SideNav({ view, setView }: { view: ViewName; setView: (view: ViewName) 
           </button>
         );
       })}
+
+      <button
+        type="button"
+        className={`${SIDE_NAV_ITEM} mt-auto border-t border-border/70 pt-3.5`}
+        style={{ background: settingsOpen ? '#eef2e6' : 'transparent' }}
+        onClick={onSettings}
+        aria-current={settingsOpen ? 'page' : undefined}
+      >
+        <Settings2
+          className="size-[18px]"
+          style={{ color: settingsOpen ? '#3f6b28' : '#a8b394' }}
+          aria-hidden="true"
+        />
+        <span
+          className="text-[9.5px] font-semibold leading-none"
+          style={{ color: settingsOpen ? 'var(--ink)' : 'var(--ink-mute)' }}
+        >
+          Einstellungen
+        </span>
+      </button>
     </nav>
   );
 }
@@ -1385,7 +1405,6 @@ export default function Home() {
         activeProperty={activeProperty}
         onActiveProperty={jumpToActive}
         onHome={() => setView('overview')}
-        onSettings={() => setSettingsOpen(true)}
       />
       <MobileHeader
         money={game.money}
@@ -1413,7 +1432,12 @@ export default function Home() {
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <SideNav view={view} setView={setView} />
+        <SideNav
+          view={view}
+          setView={setView}
+          settingsOpen={settingsOpen}
+          onSettings={() => setSettingsOpen(true)}
+        />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === 'overview' && (
           <>
