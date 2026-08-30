@@ -145,13 +145,10 @@ function WeatherBadge({ weather, className }: { weather: 'mild' | 'heat' | 'rain
     weather === 'heat' ? 'var(--tone-warn)' : weather === 'rain' ? 'var(--kind-water)' : 'var(--ink-mute)';
   return (
     <span className={className} title={label} aria-label={label}>
-      <Icon className="size-4" style={{ color }} aria-hidden="true" />
+      <Icon className="size-5" style={{ color }} aria-hidden="true" />
     </span>
   );
 }
-
-/** Gleicher Aufbau für alle Kopfkacheln: Titel oben links, Wert darunter. */
-const HEADER_TILE = 'flex h-[60px] shrink-0 flex-col justify-center gap-1.5 rounded-[9px] border px-3.5';
 
 /** Reputation als anteilig gefüllter Ring — eigene Farbe, damit sie kein Grundstückswert ist. */
 function ReputationRing({ reputation }: { reputation: number }) {
@@ -212,66 +209,47 @@ function AppHeader({
 
   return (
     <header className="hidden shrink-0 border-b border-border bg-paper lg:block">
-      <div className="mx-auto flex max-w-[1540px] items-center gap-2.5 px-5 py-2.5">
+      {/* Drei Spalten, damit das Vermögen unabhängig von den Seiten mittig steht */}
+      <div className="mx-auto grid max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-4 px-5 py-2.5">
         <button
-          className="flex shrink-0 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex w-fit items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           onClick={onHome}
         >
           <span className="size-[26px] shrink-0 rounded-[5px]" style={{ background: LOGO_STRIPES }} />
           <span className="text-[13px] font-bold leading-none tracking-[0.14em] text-ink">GARDEN GRINDER</span>
         </button>
 
-        <div className="ml-auto flex items-center gap-2.5">
-          <div className={HEADER_TILE} style={{ background: '#eef2e6', borderColor: 'rgba(79,122,47,.28)' }}>
-            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Vermögen</span>
-            <span className="font-mono text-[22px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
-              {formatMoney(money)}
-            </span>
-          </div>
-
-          <div className={`${HEADER_TILE} border-border bg-surface`}>
-            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Reputation</span>
-            <ReputationRing reputation={reputation} />
-          </div>
-
+        <div className="flex flex-col items-center gap-1.5">
+          <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Vermögen</span>
+          <span className="font-mono text-[26px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
+            {formatMoney(money)}
+          </span>
           <button
             type="button"
-            className={`${HEADER_TILE} items-start text-left disabled:cursor-default`}
-            style={{
-              background: busy ? '#e8efdf' : 'var(--surface)',
-              borderColor: busy ? 'rgba(79,122,47,.35)' : 'var(--border)',
-            }}
+            className="flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-[#efece1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default disabled:hover:bg-transparent"
             disabled={!busy}
             onClick={onActiveProperty}
             title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
           >
-            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Status</span>
-            <span className="flex items-center gap-2">
-              <span
-                className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
-                style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
-                aria-hidden="true"
-              />
-              <span className="whitespace-nowrap text-[13px] font-semibold leading-none text-ink">
-                {busy ? 'Beschäftigt' : 'Verfügbar'}
-              </span>
-              {task && (
-                <span className="whitespace-nowrap font-mono text-[13px] font-semibold leading-none text-ink-soft tabular-nums">
-                  {formatDuration(task.endsAt - Date.now())}
-                </span>
-              )}
+            <span
+              className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
+              style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
+              aria-hidden="true"
+            />
+            <span className="whitespace-nowrap text-[11.5px] font-semibold leading-none text-ink-soft">
+              {busy ? 'Beschäftigt' : 'Verfügbar'}
             </span>
+            {task && (
+              <span className="whitespace-nowrap font-mono text-[11.5px] font-semibold leading-none text-ink-soft tabular-nums">
+                {formatDuration(task.endsAt - Date.now())}
+              </span>
+            )}
           </button>
+        </div>
 
-          <div className={`${HEADER_TILE} border-border bg-surface`}>
-            <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Wetter</span>
-            <span className="flex items-center gap-2">
-              <WeatherBadge weather={weather} className="shrink-0" />
-              <span className="whitespace-nowrap text-[13px] font-semibold leading-none text-ink">
-                {weatherLabel(weather)}
-              </span>
-            </span>
-          </div>
+        <div className="flex items-center justify-end gap-4">
+          <ReputationRing reputation={reputation} />
+          <WeatherBadge weather={weather} className="grid size-7 shrink-0 place-items-center" />
         </div>
       </div>
     </header>
@@ -364,11 +342,8 @@ function MobileHeader({
   weather: 'mild' | 'heat' | 'rain';
   onBack?: () => void;
 }) {
-  const nextRep = nextUnlockReputation(reputation);
-  const repPercent = Math.min(100, (reputation / nextRep) * 100);
-
   return (
-    <header className="relative flex shrink-0 flex-col items-center gap-[7px] border-b border-border bg-paper px-4 pb-3 pt-3 lg:hidden">
+    <header className="relative flex min-h-[96px] shrink-0 flex-col items-center justify-center gap-[7px] border-b border-border bg-paper px-4 py-3 lg:hidden">
       {onBack ? (
         <button
           type="button"
@@ -385,7 +360,7 @@ function MobileHeader({
           aria-hidden="true"
         />
       )}
-      <WeatherBadge weather={weather} className="absolute right-4 top-3.5 grid size-7 place-items-center" />
+      <WeatherBadge weather={weather} className="absolute right-4 top-3 grid size-7 place-items-center" />
 
       <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Vermögen</span>
       <span className="flex items-baseline gap-1">
@@ -394,14 +369,9 @@ function MobileHeader({
         </span>
         <span className="font-mono text-[17px] font-semibold leading-none text-ink-soft">€</span>
       </span>
-      <span className="flex items-center gap-[7px]">
-        <span className="rr-label text-[8.5px] leading-none tracking-[0.14em]">Ruf</span>
-        <span className="relative h-[5px] w-14 overflow-hidden rounded-full bg-track">
-          <span className="absolute inset-y-0 left-0 bg-tone-ok" style={{ width: `${repPercent}%` }} />
-        </span>
-        <span className="font-mono text-[11.5px] font-semibold leading-none text-ink-soft tabular-nums">
-          {Math.floor(reputation)}
-        </span>
+
+      <span className="absolute bottom-3 right-4">
+        <ReputationRing reputation={reputation} />
       </span>
     </header>
   );
