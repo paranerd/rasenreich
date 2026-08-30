@@ -6,7 +6,6 @@ import {
   BellRing,
   BriefcaseBusiness,
   Check,
-  ChevronRight,
   CircleAlert,
   CloudRain,
   CloudSun,
@@ -22,6 +21,7 @@ import {
   ShoppingBag,
   Sparkles,
   Sprout,
+  Sun,
   Timer,
   TrendingUp,
   Wrench,
@@ -39,7 +39,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { useGame } from '@/hooks/use-game';
 import {
   conditionHint,
@@ -53,6 +52,7 @@ import {
   maintenanceCost,
   moistureHint,
   mowingPayout,
+  propertyMetricPercent,
   propertyStatus,
   TASK_LABELS,
   taskBlocksPlayer,
@@ -62,7 +62,7 @@ import {
 } from '@/lib/game';
 
 const taskIcons = { mow: Sprout, water: Droplets, maintain: Wrench };
-type GaugeTone = 'green' | 'blue' | 'amber' | 'rose';
+type GaugeTone = 'green' | 'blue' | 'amber';
 
 function statusBadge(property: GardenProperty) {
   const status = propertyStatus(property);
@@ -76,10 +76,10 @@ function statusBadge(property: GardenProperty) {
   return <Badge className={classes[status.tone]}>{status.label}</Badge>;
 }
 
-function metricTone(kind: TaskKind, value: number): GaugeTone {
-  if (kind === 'mow') return value >= 60 && value <= 80 ? 'green' : value > 100 ? 'rose' : 'amber';
-  if (kind === 'water') return value >= 30 && value <= 85 ? 'blue' : value > 100 ? 'rose' : 'amber';
-  return value >= 70 ? 'green' : value < 40 ? 'rose' : 'amber';
+function metricTone(kind: TaskKind): GaugeTone {
+  if (kind === 'mow') return 'green';
+  if (kind === 'water') return 'blue';
+  return 'amber';
 }
 
 function satisfactionClass(value: number) {
@@ -103,7 +103,6 @@ function GaugeRing({
     green: 'stroke-emerald-600',
     blue: 'stroke-sky-500',
     amber: 'stroke-amber-500',
-    rose: 'stroke-rose-500',
   }[tone];
   const dimension = size === 'small' ? 'size-9' : 'size-20';
   const textSize = size === 'small' ? 'text-[9px]' : 'text-base';
@@ -114,7 +113,7 @@ function GaugeRing({
       className={`relative grid shrink-0 place-items-center ${dimension}`}
       role="meter"
       aria-valuemin={0}
-      aria-valuemax={max}
+      aria-valuemax={Math.max(max, Math.ceil(value))}
       aria-valuenow={Math.round(value)}
     >
       <svg viewBox="0 0 44 44" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
@@ -143,8 +142,8 @@ function propertyWarnings(property: GardenProperty, unlocked: Record<TaskKind, n
   }
   if (property.rescueUntil) warnings.push({ label: 'Vertrag akut gefährdet', icon: CircleAlert, tone: 'text-rose-700 bg-rose-100' });
   if (property.grass > 80) warnings.push({ label: 'Rasen außerhalb des optimalen Fensters', icon: Sprout, tone: 'text-amber-700 bg-amber-100' });
-  if (property.moisture < 30 || property.moisture > 85) warnings.push({ label: 'Feuchtigkeit außerhalb des optimalen Bereichs', icon: Droplets, tone: 'text-sky-700 bg-sky-100' });
-  if (property.condition < 40) warnings.push({ label: 'Gerätewartung erforderlich', icon: Wrench, tone: 'text-rose-700 bg-rose-100' });
+  if (property.moisture < 50 || property.moisture > 100) warnings.push({ label: 'Bewässerung außerhalb des optimalen Bereichs', icon: Droplets, tone: 'text-sky-700 bg-sky-100' });
+  if (property.condition < 50) warnings.push({ label: 'Gerätewartung erforderlich', icon: Wrench, tone: 'text-rose-700 bg-rose-100' });
   if (property.task) warnings.push({ label: `${TASK_LABELS[property.task.kind]} läuft`, icon: Timer, tone: 'text-primary bg-secondary' });
   return warnings;
 }
@@ -155,7 +154,8 @@ function AppHeader({
   money,
   reputation,
   weather,
-  manualBusy,
+  activeProperty,
+  onActiveProperty,
   onSettings,
 }: {
   view: ViewName;
@@ -163,7 +163,8 @@ function AppHeader({
   money: number;
   reputation: number;
   weather: 'mild' | 'heat' | 'rain';
-  manualBusy: boolean;
+  activeProperty?: GardenProperty;
+  onActiveProperty: () => void;
   onSettings: () => void;
 }) {
   const nav = [
@@ -172,11 +173,13 @@ function AppHeader({
     { id: 'upgrades' as const, label: 'Technik', icon: ShoppingBag },
   ];
   const weatherLabel = weather === 'heat' ? 'Hitzewelle' : weather === 'rain' ? 'Regenschauer' : 'Mildes Wetter';
-  const WeatherIcon = weather === 'rain' ? CloudRain : CloudSun;
+  const WeatherIcon = weather === 'rain' ? CloudRain : weather === 'heat' ? Sun : CloudSun;
+  const weatherColor = weather === 'heat' ? 'text-amber-600' : weather === 'rain' ? 'text-sky-600' : 'text-primary';
+  const remainingTime = activeProperty?.task ? formatDuration(activeProperty.task.endsAt - Date.now()) : undefined;
 
   return (
     <header className="shrink-0 border-b border-border/80 bg-card/95 backdrop-blur">
-      <div className="mx-auto flex max-w-[1540px] items-center gap-3 px-3 py-2.5 sm:px-5 lg:px-7">
+      <div className="mx-auto flex max-w-[1540px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-5 lg:flex-nowrap lg:gap-3 lg:px-7">
         <button
           className="flex min-w-0 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           onClick={() => setView('overview')}
@@ -192,13 +195,13 @@ function AppHeader({
           </span>
         </button>
 
-        <nav className="ml-1 flex flex-1 items-center justify-center gap-1" aria-label="Hauptnavigation">
+        <nav className="order-3 flex w-full items-center justify-center gap-1 lg:order-none lg:ml-1 lg:w-auto lg:flex-1" aria-label="Hauptnavigation">
           {nav.map(({ id, label, icon: Icon }) => (
             <Button
               key={id}
               variant={view === id ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-9 px-2.5 sm:px-3"
+              className="flex-1 px-2.5 sm:flex-none sm:px-3"
               onClick={() => setView(id)}
               aria-current={view === id ? 'page' : undefined}
             >
@@ -208,26 +211,36 @@ function AppHeader({
           ))}
         </nav>
 
-        <div className="flex items-center gap-1.5 sm:gap-3">
-          <div className="hidden items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 xl:flex">
-            <WeatherIcon className="size-4 text-primary" aria-hidden="true" />
-            <span className="text-xs font-medium">{weatherLabel}</span>
-          </div>
-          <div className="rounded-lg bg-primary px-2.5 py-1.5 text-primary-foreground sm:min-w-28">
-            <span className="hidden text-[10px] text-primary-foreground/70 sm:block">Vermögen</span>
-            <span className="block text-sm font-semibold tabular-nums">{formatMoney(money)}</span>
-          </div>
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 lg:gap-2 xl:gap-3">
           <div
-            className={`flex h-9 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-semibold sm:px-2.5 sm:text-xs ${
-              manualBusy
+            className="flex size-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/50 xl:w-auto xl:px-2.5"
+            title={weatherLabel}
+            aria-label={weatherLabel}
+          >
+            <WeatherIcon className={`size-4 ${weatherColor}`} aria-hidden="true" />
+            <span className="hidden text-xs font-medium xl:inline">{weatherLabel}</span>
+          </div>
+          <div className="min-w-[7.5rem] rounded-lg bg-primary px-3 py-1.5 text-primary-foreground sm:min-w-32">
+            <span className="hidden text-[10px] text-primary-foreground/70 sm:block">Vermögen</span>
+            <span className="block truncate text-sm font-semibold tabular-nums">{formatMoney(money)}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`shrink-0 gap-1.5 px-2 disabled:opacity-100 sm:px-2.5 ${
+              activeProperty
                 ? 'border-amber-200 bg-amber-50 text-amber-800'
                 : 'border-emerald-200 bg-emerald-50 text-emerald-800'
             }`}
+            disabled={!activeProperty}
+            onClick={onActiveProperty}
+            title={activeProperty ? `Zu ${activeProperty.name} springen` : 'Kein Grundstück in Arbeit'}
           >
-            <span className={`size-1.5 rounded-full ${manualBusy ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-            {manualBusy ? 'Beschäftigt' : 'Verfügbar'}
-          </div>
-          <Badge variant="secondary" className="hidden h-9 gap-1.5 px-3 sm:inline-flex">
+            <span className={`size-1.5 rounded-full ${activeProperty ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+            <span className="hidden lg:inline">{activeProperty ? 'Beschäftigt' : 'Verfügbar'}</span>
+            {remainingTime ? <span className="tabular-nums">{remainingTime}</span> : <span className="lg:hidden">Frei</span>}
+          </Button>
+          <Badge variant="secondary" className="hidden h-9 gap-1.5 px-3 xl:inline-flex">
             <ShieldCheck className="size-3.5" /> {Math.floor(reputation)}
           </Badge>
           <Button variant="outline" size="icon" aria-label="Einstellungen" onClick={onSettings}>
@@ -251,31 +264,31 @@ function PropertyRail({
   onSelect: (id: string) => void;
 }) {
   return (
-    <aside className="min-w-0 rounded-xl border border-border bg-card shadow-sm lg:h-full lg:overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-3.5 py-3">
+    <aside className="min-w-0 lg:h-full lg:overflow-hidden">
+      <div className="mb-2 flex items-center justify-between px-1 py-1.5">
         <div>
           <p className="text-sm font-semibold">Grundstücke</p>
           <p className="text-xs text-muted-foreground">{properties.length} aktive Verträge</p>
         </div>
         <MapPin className="size-4 text-muted-foreground" aria-hidden="true" />
       </div>
-      <div className="w-full lg:h-[calc(100%-61px)] lg:overflow-y-auto">
-        <div className="flex flex-col gap-2 p-2">
+      <div className="w-full lg:h-[calc(100%-51px)] lg:overflow-y-auto">
+        <div className="flex flex-col gap-2 pb-1 pr-1">
           {properties.map((property) => {
             const selected = property.id === selectedId;
             const warnings = propertyWarnings(property, unlocked);
             const miniGauges = [
-              { kind: 'mow' as const, label: 'Gras', value: property.grass, max: 150, icon: Sprout },
-              { kind: 'water' as const, label: 'Feuchte', value: property.moisture, max: 150, icon: Droplets },
-              { kind: 'maintain' as const, label: 'Geräte', value: property.condition, max: 100, icon: Wrench },
+              { kind: 'mow' as const, label: 'Rasenschnitt', value: propertyMetricPercent(property, 'mow') },
+              { kind: 'water' as const, label: 'Bewässerung', value: propertyMetricPercent(property, 'water') },
+              { kind: 'maintain' as const, label: 'Wartung', value: propertyMetricPercent(property, 'maintain') },
             ];
             return (
               <button
                 key={property.id}
-                className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                className={`w-full rounded-xl border bg-card p-3 text-left shadow-sm transition-colors ${
                   selected
-                    ? 'border-primary/30 bg-secondary shadow-sm'
-                    : 'border-transparent hover:border-border hover:bg-muted/60'
+                    ? 'border-primary/40 ring-1 ring-primary/15'
+                    : 'border-border hover:border-primary/25 hover:bg-muted/30'
                 }`}
                 onClick={() => onSelect(property.id)}
               >
@@ -286,36 +299,35 @@ function PropertyRail({
                       {property.size.toLocaleString('de-DE')} m² · {property.type}
                     </span>
                   </span>
-                  {warnings.length > 0 && (
-                    <span className="flex shrink-0 items-center gap-1">
-                      {warnings.slice(0, 3).map(({ label, icon: WarningIcon, tone }) => (
-                        <span
-                          key={label}
-                          className={`grid size-6 place-items-center rounded-md ${tone}`}
-                          title={label}
-                          aria-label={label}
-                        >
-                          <WarningIcon className="size-3.5" aria-hidden="true" />
-                        </span>
-                      ))}
+                  <span className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span className={`text-sm font-bold tabular-nums ${satisfactionClass(property.satisfaction)}`}>
+                      {Math.round(property.satisfaction)} %
                     </span>
-                  )}
-                </span>
-                <span className="mt-2 flex justify-end border-t border-border/70 pt-2">
-                  <span className={`text-sm font-bold tabular-nums ${satisfactionClass(property.satisfaction)}`}>
-                    {Math.round(property.satisfaction)} %
+                    {warnings.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        {warnings.slice(0, 3).map(({ label, icon: WarningIcon, tone }) => (
+                          <span
+                            key={label}
+                            className={`grid size-6 place-items-center rounded-md ${tone}`}
+                            title={label}
+                            aria-label={label}
+                          >
+                            <WarningIcon className="size-3.5" aria-hidden="true" />
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </span>
                 </span>
                 <span className="mt-2 grid grid-cols-3 gap-1.5" aria-label="Grundstückswerte">
-                  {miniGauges.map(({ kind, label, value, max, icon: Icon }) => (
+                  {miniGauges.map(({ kind, label, value }) => (
                     <span
                       key={kind}
-                      className="flex items-center justify-center gap-1.5 rounded-md bg-card/75 px-1.5 py-1.5"
-                      title={`${label}: ${Math.round(value)}`}
-                      aria-label={`${label}: ${Math.round(value)}`}
+                      className="flex items-center justify-center rounded-md bg-card/75 px-1.5 py-1.5"
+                      title={`${label}: ${Math.round(value)} %`}
+                      aria-label={`${label}: ${Math.round(value)} %`}
                     >
-                      <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                      <GaugeRing value={value} max={max} tone={metricTone(kind, value)} size="small" />
+                      <GaugeRing value={value} tone={metricTone(kind)} size="small" />
                     </span>
                   ))}
                 </span>
@@ -353,12 +365,12 @@ function StatActionCard({
   const automatic = isAutomated(property, kind);
   const handsFree = Boolean(equipment.handsFree);
   const blocked = Boolean(property.task) || (!automatic && manualBusy) || (property.condition <= 0 && kind !== 'maintain');
-  const value = kind === 'mow' ? property.grass : kind === 'water' ? property.moisture : property.condition;
-  const max = kind === 'maintain' ? 100 : 150;
+  const value = propertyMetricPercent(property, kind);
   const hint = kind === 'mow' ? grassHint(value) : kind === 'water' ? moistureHint(value) : conditionHint(value);
-  const taskProgress = active && property.task
-    ? ((Date.now() - property.task.startedAt) / (property.task.endsAt - property.task.startedAt)) * 100
+  const remainingProgress = active && property.task
+    ? ((property.task.endsAt - Date.now()) / (property.task.endsAt - property.task.startedAt)) * 100
     : 0;
+  const amountLabel = kind === 'mow' ? `+${formatMoney(payout)}` : kind === 'maintain' ? `−${formatMoney(cost)}` : `±${formatMoney(0)}`;
 
   return (
     <Card className={active ? 'ring-2 ring-primary/45' : ''}>
@@ -377,47 +389,40 @@ function StatActionCard({
         </div>
 
         <div className="flex items-center gap-4 rounded-xl bg-muted/55 p-3">
-          <GaugeRing value={value} max={max} tone={metricTone(kind, value)} />
+          <GaugeRing value={value} tone={metricTone(kind)} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              {kind === 'mow' ? 'Grasschnitt' : kind === 'water' ? 'Feuchtigkeit' : 'Gerätezustand'}
+              {kind === 'mow' ? 'Rasenschnitt' : kind === 'water' ? 'Feuchtigkeit' : 'Gerätezustand'}
             </p>
             <p className="mt-1 text-sm font-semibold">{hint}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              {kind === 'mow' ? 'Optimal: 60–80' : kind === 'water' ? 'Optimal: 30–85' : 'Wartung empfohlen unter 40'}
+              {kind === 'mow'
+                ? 'Frisch gemäht: 100 % · verwildert unter 10 %'
+                : kind === 'water'
+                  ? 'Optimal: 100 % · darüber zu nass'
+                  : 'Ausfallrisiko steigt unter 50 %'}
             </p>
           </div>
         </div>
 
-        {active && property.task && (
-          <div className="rounded-lg bg-secondary/65 p-2.5">
-            <div className="mb-1.5 flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 font-semibold"><Timer className="size-3.5" /> Läuft</span>
-              <span className="tabular-nums text-muted-foreground">{formatDuration(property.task.endsAt - Date.now())}</span>
-            </div>
-            <Progress value={taskProgress} className="[&_[data-slot=progress-track]]:h-1.5" />
-          </div>
-        )}
-
-        <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><Timer className="size-3.5" /> {formatDuration(duration * 1_000)}</span>
-          {kind === 'mow' && (
-            <strong className="text-emerald-700">
-              {active
-                ? `+${formatMoney(property.task?.payoutAccrued ?? 0)} / ${formatMoney(payout)}`
-                : `+${formatMoney(payout)}`}
-            </strong>
-          )}
-          {kind === 'maintain' && <strong className="text-foreground">−{formatMoney(cost)}</strong>}
-        </div>
         <Button
           variant={kind === 'mow' ? 'default' : 'outline'}
-          className="w-full"
+          className="relative mt-auto w-full overflow-hidden disabled:opacity-100"
           disabled={blocked}
           onClick={onStart}
         >
-          {active ? 'Läuft…' : automatic ? 'Jetzt auslösen' : 'Starten'}
-          {!active && <ChevronRight data-icon="inline-end" />}
+          {active && property.task && (
+            <span
+              className={`absolute inset-y-0 left-0 transition-[width] duration-1000 ${kind === 'mow' ? 'bg-white/20' : 'bg-secondary'}`}
+              style={{ width: `${Math.min(100, Math.max(0, remainingProgress))}%` }}
+              aria-hidden="true"
+            />
+          )}
+          <span className="relative z-10 tabular-nums">
+            {active && property.task
+              ? `Restzeit ${formatDuration(property.task.endsAt - Date.now())}`
+              : `${amountLabel} · ${formatDuration(duration * 1_000)}`}
+          </span>
         </Button>
       </CardContent>
     </Card>
@@ -442,25 +447,21 @@ function PropertyDetail({
           className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#17311f]/90 via-[#17311f]/20 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-4 text-white sm:p-5">
+        <div className="absolute right-4 top-4 rounded-xl border border-white/20 bg-black/30 px-3.5 py-2.5 text-right text-white shadow-sm backdrop-blur-sm sm:right-5 sm:top-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/65">Reputation</p>
+          <p className={`mt-0.5 text-xl font-bold tabular-nums ${property.satisfaction >= 75 ? 'text-emerald-200' : property.satisfaction >= 40 ? 'text-amber-200' : 'text-rose-200'}`}>
+            {Math.round(property.satisfaction)} %
+          </p>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 p-4 text-white sm:p-5">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               {statusBadge(property)}
-              <span className="rounded-full border border-white/20 bg-black/25 px-2.5 py-1 text-xs backdrop-blur-sm">
-                Reputation beim Kunden{' '}
-                <strong className={property.satisfaction >= 75 ? 'text-emerald-200' : property.satisfaction >= 40 ? 'text-amber-200' : 'text-rose-200'}>
-                  {Math.round(property.satisfaction)} %
-                </strong>
-              </span>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{property.name}</h2>
             <p className="mt-1 text-sm text-white/75">
               {property.type} · {property.size.toLocaleString('de-DE')} m² · {property.subtitle}
             </p>
-          </div>
-          <div className="hidden rounded-xl border border-white/20 bg-black/20 px-4 py-3 text-right backdrop-blur-sm sm:block">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-white/65">Optimaler Ertrag</p>
-            <p className="text-xl font-semibold">{formatMoney(property.payout * 1.2)}</p>
           </div>
         </div>
       </div>
@@ -830,6 +831,9 @@ export default function Home() {
   }
 
   const manualBusy = game.properties.some((property) => property.task && taskBlocksPlayer(property.task));
+  const activeProperty =
+    game.properties.find((property) => property.task && taskBlocksPlayer(property.task))
+    ?? game.properties.find((property) => property.task);
   return (
     <main className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden">
       <AppHeader
@@ -838,7 +842,13 @@ export default function Home() {
         money={game.money}
         reputation={game.reputation}
         weather={game.weather}
-        manualBusy={manualBusy}
+        activeProperty={activeProperty}
+        onActiveProperty={() => {
+          if (!activeProperty) return;
+          setSelectedId(activeProperty.id);
+          setView('overview');
+          setMobileDetailOpen(true);
+        }}
         onSettings={() => setSettingsOpen(true)}
       />
 

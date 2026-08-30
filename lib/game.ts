@@ -221,8 +221,8 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
 };
 
 export const TASK_LABELS: Record<TaskKind, string> = {
-  mow: 'Mähen',
-  water: 'Bewässern',
+  mow: 'Rasenschnitt',
+  water: 'Bewässerung',
   maintain: 'Wartung',
 };
 
@@ -344,7 +344,7 @@ export function taskDuration(property: GardenProperty, kind: TaskKind) {
   let conditionFactor = 1 + Math.max(0, 55 - property.condition) / 100;
   if (kind === 'mow' && property.grass > 100) conditionFactor *= 2;
   else if (kind === 'mow' && property.grass > 80) conditionFactor *= 1.5;
-  if (kind === 'mow' && property.moisture > 85) conditionFactor *= 1.4;
+  if (kind === 'mow' && property.moisture > 100) conditionFactor *= 1.4;
   return Math.max(8, Math.round(base * sizeFactor * equipment.speed * conditionFactor));
 }
 
@@ -371,7 +371,7 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     const grassBefore = property.grass;
     const payout = task.payoutTotal ?? mowingPayout(property);
     const remainingPayout = Math.max(0, payout - (task.payoutAccrued ?? 0));
-    const wetFactor = property.moisture > 85 ? 2 : 1;
+    const wetFactor = property.moisture > 100 ? 2 : 1;
     const longFactor = grassBefore > 100 ? 2.2 : grassBefore > 80 ? 1.45 : 1;
     const wear = 3.2 * Math.pow(property.size / 120, 0.3) * wetFactor * longFactor;
 
@@ -383,7 +383,7 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     property.grass = Math.max(12, grassBefore - 66);
     property.condition = clamp(property.condition - wear);
 
-    const failureRisk = property.condition < 20 ? 0.15 : property.condition < 40 ? 0.04 : 0;
+    const failureRisk = property.condition < 20 ? 0.15 : property.condition < 50 ? 0.04 : 0;
     if (failureRisk > 0 && Math.random() < failureRisk) {
       property.condition = 0;
       addLog(state, `${property.name}: Der Mäher ist ausgefallen und muss repariert werden.`, 'warning', at);
@@ -412,10 +412,9 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
 
   if (task.kind === 'water') {
     const before = property.moisture;
-    property.moisture = clamp(property.moisture + 48, 0, 150);
+    property.moisture = 100;
     property.condition = clamp(property.condition - 0.8);
-    if (before < 30) property.satisfaction = clamp(property.satisfaction + 2);
-    if (property.moisture > 100) property.satisfaction = clamp(property.satisfaction - 5);
+    if (before < 50) property.satisfaction = clamp(property.satisfaction + 2);
     addLog(state, `${property.name}: Bewässerung abgeschlossen.`, 'neutral', at);
   }
 
@@ -475,12 +474,12 @@ function startAutomatedTask(state: GameState, property: GardenProperty, kind: Ta
 
 function tryAutomation(state: GameState, property: GardenProperty, at: number) {
   if (property.task) return;
-  if (isAutomated(property, 'maintain') && property.condition <= 38) {
+  if (isAutomated(property, 'maintain') && property.condition <= 48) {
     startAutomatedTask(state, property, 'maintain', at);
     return;
   }
   if (property.condition <= 0) return;
-  if (isAutomated(property, 'water') && property.moisture <= 36) {
+  if (isAutomated(property, 'water') && property.moisture <= 55) {
     startAutomatedTask(state, property, 'water', at);
     return;
   }
@@ -493,7 +492,7 @@ function advanceNaturalState(state: GameState, property: GardenProperty, seconds
   const minutes = seconds / 60;
   const fertilizer = property.fertilizer ? 1.5 : 1;
   const fertilizerWater = property.fertilizer ? 1.3 : 1;
-  const moistureGrowth = property.moisture < 30 ? 0.5 : property.moisture > 110 ? 0.72 : 1;
+  const moistureGrowth = property.moisture < 50 ? 0.5 : property.moisture > 110 ? 0.72 : 1;
   const heatWater = state.weather === 'heat' ? 1.75 : 1;
   const rainGain = state.weather === 'rain' ? 1.35 * minutes : 0;
 
@@ -513,9 +512,9 @@ function advanceNaturalState(state: GameState, property: GardenProperty, seconds
   let satisfactionDelta = 0;
   if (property.grass > 80) satisfactionDelta -= (property.grass - 80) * 0.0018 * minutes;
   if (property.grass > 100) satisfactionDelta -= 0.07 * minutes;
-  if (property.moisture < 30) satisfactionDelta -= (30 - property.moisture) * 0.0016 * minutes;
-  if (property.moisture > 85) satisfactionDelta -= (property.moisture - 85) * 0.0014 * minutes;
-  if (property.moisture >= 30 && property.moisture <= 85 && property.grass <= 80) {
+  if (property.moisture < 50) satisfactionDelta -= (50 - property.moisture) * 0.0016 * minutes;
+  if (property.moisture > 100) satisfactionDelta -= (property.moisture - 100) * 0.0014 * minutes;
+  if (property.moisture >= 50 && property.moisture <= 100 && property.grass <= 80) {
     satisfactionDelta += 0.018 * minutes;
   }
   property.satisfaction = clamp(
@@ -689,8 +688,8 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
   if (blocksPlayer && manualBusy) {
     return { state, message: 'Du bist bereits mit einer manuellen Aufgabe beschäftigt.' };
   }
-  if (kind === 'water' && property.moisture >= 145) {
-    return { state, message: 'Der Boden kann aktuell kein weiteres Wasser aufnehmen.' };
+  if (kind === 'water' && property.moisture >= 100) {
+    return { state, message: 'Der Boden ist bereits optimal gewässert.' };
   }
   if (kind === 'maintain' && property.condition >= 98) {
     return { state, message: 'Die Geräte sind bereits in bestem Zustand.' };
@@ -853,7 +852,7 @@ export function nextUnlockReputation(reputation: number) {
 
 export function propertyStatus(property: GardenProperty) {
   if (property.rescueUntil) return { label: 'Kritisch', tone: 'danger' as const };
-  if (property.condition <= 20 || property.satisfaction <= 25) {
+  if (property.condition < 50 || property.satisfaction <= 25) {
     return { label: 'Achtung', tone: 'warning' as const };
   }
   if (property.task) return { label: 'In Arbeit', tone: 'info' as const };
@@ -863,24 +862,32 @@ export function propertyStatus(property: GardenProperty) {
   return { label: 'Im Plan', tone: 'neutral' as const };
 }
 
+export function propertyMetricPercent(property: GardenProperty, kind: TaskKind) {
+  if (kind === 'mow') {
+    return Math.min(100, Math.max(0, ((150 - property.grass) / 130) * 100));
+  }
+  return kind === 'water' ? property.moisture : property.condition;
+}
+
 export function grassHint(value: number) {
-  if (value < 60) return 'Noch kurz';
-  if (value <= 80) return 'Optimales Fenster';
-  if (value <= 100) return 'Zu lang';
+  if (value >= 85) return 'Frisch gemäht';
+  if (value >= 70) return 'Noch kurz';
+  if (value >= 45) return 'Mähbereit';
+  if (value >= 10) return 'Zu lang';
   return 'Verwildert';
 }
 
 export function moistureHint(value: number) {
-  if (value < 30) return 'Vertrocknet';
-  if (value <= 70) return 'Gut versorgt';
-  if (value <= 85) return 'Feucht';
-  if (value <= 100) return 'Matschig';
+  if (value < 25) return 'Vertrocknet';
+  if (value < 60) return 'Trocken';
+  if (value <= 100) return 'Optimal gewässert';
+  if (value <= 115) return 'Zu nass';
   return 'Gefahr von Staunässe';
 }
 
 export function conditionHint(value: number) {
   if (value < 20) return 'Ausfallgefahr';
-  if (value < 40) return 'Wartung fällig';
+  if (value < 50) return 'Erhöhtes Ausfallrisiko';
   if (value < 75) return 'Gebraucht';
   return 'Einsatzbereit';
 }
