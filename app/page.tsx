@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Banknote,
@@ -24,12 +24,13 @@ import {
 
 import { Gauge } from '@/components/gauge';
 import { Button } from '@/components/ui/button';
-import { useGame } from '@/hooks/use-game';
+import { Toast, useGame } from '@/hooks/use-game';
 import {
   ACTION_LABELS,
   EQUIPMENT,
   formatDuration,
   formatMoney,
+  GameEvent,
   GardenProperty,
   GameState,
   humanOfflineDuration,
@@ -456,37 +457,154 @@ function MobileTabBar({
   );
 }
 
+const TOAST_TONE = {
+  good: { color: 'var(--tone-ok)', border: 'rgba(92,143,58,.4)', Icon: Check },
+  warning: { color: 'var(--tone-warn)', border: 'rgba(192,134,58,.45)', Icon: BellRing },
+  info: { color: 'var(--ink-soft)', border: 'rgba(36,41,31,.16)', Icon: Sparkles },
+} as const;
+
+type ToastTone = keyof typeof TOAST_TONE;
+
+/**
+ * Eine Meldung im Stapel. Ohne Standzeit bleibt sie stehen und will bestaetigt
+ * werden; mit Standzeit laeuft der Balken am unteren Rand sichtbar ab.
+ */
+function ToastCard({
+  text,
+  tone,
+  duration,
+  actionLabel,
+  onDismiss,
+}: {
+  text: React.ReactNode;
+  tone: ToastTone;
+  duration?: number;
+  actionLabel?: string;
+  onDismiss: () => void;
+}) {
+  const { color, border, Icon } = TOAST_TONE[tone];
+  // Der Spieltakt rendert jede Sekunde neu. Ohne Ref auf die Rueckmeldung
+  // wuerde der Effekt jedes Mal neu laufen und die Standzeit nie ablaufen.
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+
+  useEffect(() => {
+    if (!duration) return;
+    const timer = window.setTimeout(() => dismissRef.current(), duration);
+    return () => window.clearTimeout(timer);
+  }, [duration]);
+
+  return (
+    <div
+      className="rr-toast pointer-events-auto flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border bg-paper shadow-lg"
+      style={{ borderColor: border }}
+    >
+      <div className="flex items-center gap-2.5 py-2.5 pl-3 pr-2">
+        <Icon className="size-4 shrink-0" style={{ color }} aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">{text}</p>
+        {actionLabel ? (
+          <Button variant="outline" size="xs" className="shrink-0 bg-surface" onClick={onDismiss}>
+            {actionLabel}
+          </Button>
+        ) : (
+          <button
+            type="button"
+            className="grid size-7 shrink-0 place-items-center rounded-md text-ink-mute transition-colors hover:bg-[#efece1] hover:text-ink"
+            aria-label="Meldung schließen"
+            onClick={onDismiss}
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {duration ? (
+        <span className="h-[3px] w-full shrink-0 bg-track" aria-hidden="true">
+          <span
+            className="rr-toast-timer block h-full w-full"
+            style={{ background: color, animationDuration: `${duration}ms` }}
+          />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** Alle Meldungen an einer Stelle: zentriert oben, direkt unter dem Kopf. */
+function ToastStack({
+  event,
+  toasts,
+  onResolveEvent,
+  onDismiss,
+}: {
+  event?: GameEvent;
+  toasts: Toast[];
+  onResolveEvent: () => void;
+  onDismiss: (id: string) => void;
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 z-40 flex flex-col items-center gap-2 px-4 pt-3"
+      aria-live="polite"
+    >
+      {event && (
+        <ToastCard
+          key={event.id}
+          tone={event.type === 'review' ? 'good' : 'warning'}
+          actionLabel={event.actionLabel ?? 'Verstanden'}
+          onDismiss={onResolveEvent}
+          text={
+            <>
+              <strong className="font-semibold">{event.title}:</strong> {event.description}
+            </>
+          }
+        />
+      )}
+      {toasts.map((toast) => (
+        <ToastCard
+          key={toast.id}
+          text={toast.text}
+          tone={toast.tone}
+          duration={toast.duration}
+          onDismiss={() => onDismiss(toast.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function FilterChips({
   properties,
   active,
   onChange,
+  className = '',
 }: {
   properties: GardenProperty[];
   active: FilterId;
   onChange: (id: FilterId) => void;
+  className?: string;
 }) {
+  // Die Leiste bleibt vollständig stehen, damit die Schaltflächen nicht springen.
   const chips = FILTERS.map((filter) => ({
     ...filter,
     count: properties.filter(filter.match).length,
-  })).filter((filter) => filter.id === 'all' || filter.count > 0);
-
-  // Eine einzelne "Alle"-Schaltfläche filtert nichts — dann bleibt die Leiste weg.
-  if (chips.length < 2) return null;
+  }));
 
   return (
-    <div className="flex shrink-0 gap-[7px] overflow-x-auto px-4 py-2.5">
+    <div className={`flex shrink-0 gap-[7px] overflow-x-auto px-4 py-2.5 ${className}`}>
       {chips.map((chip) => {
         const on = chip.id === active;
+        const empty = chip.count === 0 && chip.id !== 'all';
         return (
           <button
             key={chip.id}
             type="button"
-            className="shrink-0 whitespace-nowrap rounded-lg border px-[13px] py-[9px] text-xs font-semibold leading-none"
+            className="shrink-0 whitespace-nowrap rounded-lg border px-[13px] py-[9px] text-xs font-semibold leading-none disabled:cursor-default"
             style={{
               background: on ? 'var(--ink)' : 'var(--paper)',
-              color: on ? 'var(--surface)' : 'var(--ink-soft)',
-              borderColor: on ? 'var(--ink)' : 'rgba(36,41,31,.14)',
+              color: on ? 'var(--surface)' : empty ? '#b0b4a6' : 'var(--ink-soft)',
+              borderColor: on ? 'var(--ink)' : empty ? 'rgba(36,41,31,.07)' : 'rgba(36,41,31,.14)',
             }}
+            disabled={empty && !on}
             onClick={() => onChange(chip.id)}
             aria-pressed={on}
           >
@@ -503,19 +621,27 @@ function FilterChips({
 function PropertyList({
   properties,
   selectedId,
+  filter,
+  onFilter,
   onSelect,
 }: {
   properties: GardenProperty[];
   selectedId: string;
+  filter: FilterId;
+  onFilter: (id: FilterId) => void;
   onSelect: (id: string) => void;
 }) {
   const blocked = properties.filter(isBlocked).length;
+  const match = FILTERS.find((entry) => entry.id === filter)?.match ?? (() => true);
+  const visible = properties.filter(match);
 
   return (
     <aside className="hidden w-[392px] shrink-0 flex-col border-r border-border bg-paper lg:flex">
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <span className="rr-label text-[11px] leading-none tracking-[0.12em] text-ink-soft">
-          {properties.length} {properties.length === 1 ? 'Grundstück' : 'Grundstücke'}
+          {filter === 'all'
+            ? `${properties.length} ${properties.length === 1 ? 'Grundstück' : 'Grundstücke'}`
+            : `${visible.length} von ${properties.length}`}
         </span>
         {blocked > 0 && (
           <span
@@ -526,8 +652,19 @@ function PropertyList({
           </span>
         )}
       </div>
+      <FilterChips
+        properties={properties}
+        active={filter}
+        onChange={onFilter}
+        className="border-b border-border/60"
+      />
       <div className="flex-1 overflow-y-auto">
-        {properties.map((property) => {
+        {visible.length === 0 && (
+          <p className="px-4 py-8 text-center text-[12.5px] text-ink-soft">
+            Kein Grundstück passt zu diesem Filter.
+          </p>
+        )}
+        {visible.map((property) => {
           const selected = property.id === selectedId;
           return (
             <button
@@ -1308,7 +1445,8 @@ function UpgradesView({
 export default function Home() {
   const {
     game,
-    notice,
+    toasts,
+    dismissToast,
     offlineSummary,
     dismissOfflineSummary,
     startTask,
@@ -1390,21 +1528,13 @@ export default function Home() {
         onBack={view === 'overview' && mobileDetail ? () => setMobileDetail(false) : undefined}
       />
 
-      {game.activeEvent && (
-        <div className="shrink-0 border-b" style={{ background: '#f6ead6', borderColor: 'rgba(192,134,58,.35)' }}>
-          <div className="mx-auto flex max-w-[1540px] items-center gap-3 px-4 py-2 lg:px-5">
-            <BellRing className="size-4 shrink-0" style={{ color: 'var(--tone-warn)' }} aria-hidden="true" />
-            <p className="min-w-0 flex-1 truncate text-[12.5px] text-ink">
-              <strong className="font-semibold">{game.activeEvent.title}:</strong> {game.activeEvent.description}
-            </p>
-            <Button variant="outline" size="xs" className="shrink-0 bg-paper" onClick={resolveEvent}>
-              {game.activeEvent.actionLabel ?? 'Verstanden'}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <ToastStack
+          event={game.activeEvent}
+          toasts={toasts}
+          onResolveEvent={resolveEvent}
+          onDismiss={dismissToast}
+        />
         <SideNav
           view={view}
           setView={setView}
@@ -1416,7 +1546,13 @@ export default function Home() {
           <>
             {/* Desktop: Liste links, Detail rechts (Entwurf 3b) */}
             <div className="hidden min-h-0 flex-1 lg:flex">
-              <PropertyList properties={game.properties} selectedId={selected.id} onSelect={setSelectedId} />
+              <PropertyList
+                properties={game.properties}
+                selectedId={selected.id}
+                filter={filter}
+                onFilter={setFilter}
+                onSelect={setSelectedId}
+              />
               <PropertyDetail
                 game={game}
                 property={selected}
@@ -1487,16 +1623,6 @@ export default function Home() {
         settingsOpen={settingsOpen}
         onSettings={() => setSettingsOpen(true)}
       />
-
-      {notice && (
-        <output
-          aria-live="polite"
-          className="fixed bottom-24 left-1/2 z-50 flex w-[min(440px,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-xl px-4 py-3 text-sm shadow-xl lg:bottom-4"
-          style={{ background: 'var(--ink)', color: 'var(--paper)' }}
-        >
-          <Sparkles className="size-4 shrink-0" aria-hidden="true" /> {notice}
-        </output>
-      )}
 
       {offlineSummary && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4" role="presentation">

@@ -153,6 +153,38 @@ body {
   animation: rrPulse 1.6s ease-in-out infinite;
 }
 
+/* Toasts fahren unter dem Kopf ein; der Balken laeuft ueber die Standzeit ab. */
+@keyframes rrToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rrToastTimer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.rr-toast {
+  animation: rrToastIn 0.18s ease-out;
+}
+
+.rr-toast-timer {
+  transform-origin: left;
+  animation-name: rrToastTimer;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
 /* Versalien-Label in Mono, das Leitmotiv des Entwurfs */
 .rr-label {
   font-family: var(--font-mono-stack);

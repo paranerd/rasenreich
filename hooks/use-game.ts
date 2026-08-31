@@ -22,17 +22,32 @@ import { getSaveStorage } from '@/lib/storage';
 
 const STORAGE_KEY = 'garden-grinder-save-v1';
 
+/** Fluechtige Meldung im Toast-Stapel. Ereignisse kommen aus dem Spielstand und bleiben stehen. */
+export interface Toast {
+  id: string;
+  text: string;
+  tone: 'info' | 'good' | 'warning';
+  duration: number;
+}
+
+const TOAST_DURATION = 4_000;
+const MAX_TOASTS = 3;
+
 export function useGame() {
   const [game, setGame] = useState<GameState | null>(null);
-  const [notice, setNotice] = useState('');
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const pendingMessage = useRef<string | undefined>(undefined);
   const [offlineSummary, setOfflineSummary] = useState<OfflineSummary | null>(null);
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showNotice = useCallback((message?: string) => {
-    if (!message) return;
-    setNotice(message);
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(''), 3_500);
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  // Die Standzeit laeuft im Toast selbst ab — hier entsteht nur der Eintrag.
+  const showToast = useCallback((text?: string, tone: Toast['tone'] = 'info') => {
+    if (!text) return;
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    setToasts((current) => [...current, { id, text, tone, duration: TOAST_DURATION }].slice(-MAX_TOASTS));
   }, []);
 
   useEffect(() => {
@@ -62,7 +77,7 @@ export function useGame() {
 
       if (cancelled) return;
       if (broken) {
-        showNotice('Der alte Spielstand war nicht lesbar. Ein neuer Betrieb wurde gestartet.');
+        showToast('Der alte Spielstand war nicht lesbar. Ein neuer Betrieb wurde gestartet.', 'warning');
       }
       if (summary) setOfflineSummary(summary);
       setGame(initial);
@@ -72,7 +87,7 @@ export function useGame() {
     return () => {
       cancelled = true;
     };
-  }, [showNotice]);
+  }, [showToast]);
 
   useEffect(() => {
     if (!game) return;
@@ -100,28 +115,29 @@ export function useGame() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    },
-    [],
-  );
+  // Der Updater darf keine Meldung ausloesen: React ruft ihn im Strict Mode
+  // doppelt auf, der Toast erschiene dann zweimal. Die Zuweisung hier ist
+  // idempotent, ausgegeben wird erst nach dem Rendern.
+  const run = useCallback((operation: (current: GameState) => GameResult) => {
+    setGame((current) => {
+      if (!current) return current;
+      const result = operation(current);
+      pendingMessage.current = result.message;
+      return result.state;
+    });
+  }, []);
 
-  const run = useCallback(
-    (operation: (current: GameState) => GameResult) => {
-      setGame((current) => {
-        if (!current) return current;
-        const result = operation(current);
-        showNotice(result.message);
-        return result.state;
-      });
-    },
-    [showNotice],
-  );
+  useEffect(() => {
+    const message = pendingMessage.current;
+    if (!message) return;
+    pendingMessage.current = undefined;
+    showToast(message);
+  });
 
   return {
     game,
-    notice,
+    toasts,
+    dismissToast,
     offlineSummary,
     dismissOfflineSummary: () => setOfflineSummary(null),
     startTask: (propertyId: string, kind: TaskKind) =>
@@ -144,7 +160,8 @@ export function useGame() {
       void getSaveStorage().remove(STORAGE_KEY);
       setGame(createInitialState());
       setOfflineSummary(null);
-      showNotice('Ein neuer Betrieb wurde gestartet.');
+      setToasts([]);
+      showToast('Ein neuer Betrieb wurde gestartet.', 'good');
     },
   };
 }
