@@ -18,13 +18,14 @@ Jedes Grundstück hat seinen eigenen Rasenmäher, Gartenschlauch, etc. Diese Din
 
 Anfangs mäht der Spieler manuell, dann bekommt er besseres Equipment, damit es einfacher wird und irgendwann automatisiert er die Aufgabe.
 
-Der Rasen wächst über Zeit. Ein optimales Fenster gibt es bewusst nicht: bezahlt wird, was tatsächlich geschnitten wird. Zu früh gemäht heißt schlicht wenig Geld für die volle Rüstzeit. Zu spät gemäht bringt kein Geld mehr dazu — ein Schnitt nimmt höchstens 66 Punkte Länge ab —, kostet aber Zeit, Verschleiß, Reputation und über den sinkenden Wert auch Kundenzufriedenheit.
+Der Rasen wächst über Zeit. Ein optimales Fenster gibt es bewusst nicht: bezahlt wird, was tatsächlich geschnitten wird. Jede Arbeit läuft bis zum Ende durch, also bis der Wert bei 100 % liegt — abgebrochen wird nur von Hand. Die Dauer wächst deshalb mit dem Pensum: langes Gras zu mähen dauert länger, bringt ab einem gewissen Punkt aber kein Geld mehr.
 
 Beispiel:
 
+- **Dauer:** anteilig zum Pensum bis 100 %, dazu Fläche, Gerät und Zustand
 - **Ertrag:** anteilig zur geschnittenen Länge, gedeckelt bei 66 Punkten; darüber steigt nur noch der Aufwand
-- **> 80:** Mähdauer +50 %, erhöhter Verschleiß
-- **> 100:** verwildert — doppelte Mähdauer, deutlich mehr Verschleiß, Reputation sinkt statt zu steigen
+- **> 80:** zäheres Gras, Mähdauer zusätzlich +20 %, erhöhter Verschleiß
+- **> 100:** verwildert — zusätzlich +50 % Dauer, deutlich mehr Verschleiß, Reputation sinkt statt zu steigen
 
 ## Bewässerung
 
@@ -41,7 +42,7 @@ Beispiel:
 
 ## Wartung
 
-Geräte verschleißen mit der Zeit, mit Nutzung und auch einfach spontan durch unerwartete Events. Wartung kostet Zeit und Geld. Der Spieler kann die Zeit für die Wartung aber durch besseres Werkzeug verkürzen und letztlich auch die Wartung komplett automatisieren durch Beauftragung einer Firma.
+Geräte verschleißen mit der Zeit, mit Nutzung und auch einfach spontan durch unerwartete Events. Wartung kostet Zeit und Geld und stellt den Zustand immer vollständig her; besseres Werkzeug macht sie schneller, nicht gründlicher. Letztlich lässt sich die Wartung durch Beauftragung einer Firma komplett automatisieren.
 
 Beispiel:
 

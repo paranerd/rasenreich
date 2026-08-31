@@ -15,10 +15,18 @@ export interface EquipmentLevel {
   description: string;
 }
 
-/** Was eine Aufgabe über ihre gesamte Laufzeit an den Werten verändert. */
+/** Welcher Wert einer Aufgabe auf welches Ziel zuläuft. */
+export type TaskTargetKey = 'grass' | 'moisture' | 'condition';
+
+/** Was eine Aufgabe über ihre gesamte Laufzeit bewirkt. */
 export interface TaskEffect {
-  grass?: number;
-  moisture?: number;
+  /**
+   * Der Wert, den die Arbeit bis zum Ende erreicht. Angesteuert wird das Ziel,
+   * nicht eine feste Menge — was der Rasen währenddessen nachwächst, gleicht
+   * die Arbeit mit aus und landet am Ende exakt bei 100 %.
+   */
+  target?: { key: TaskTargetKey; value: number };
+  /** Nebenwirkung auf den Gerätezustand, als Gesamtmenge über die Laufzeit. */
   condition?: number;
 }
 
@@ -485,13 +493,16 @@ export function taskDuration(property: GardenProperty, kind: TaskKind) {
   const base = kind === 'mow' ? 30 : kind === 'water' ? 45 : 60;
   const sizeFactor = Math.pow(property.size / 120, 0.56);
   const equipment = EQUIPMENT[kind][property.equipment[kind]];
+  // Die Arbeit läuft bis 100 %, die Dauer wächst also mit dem Weg dorthin.
+  const load = taskWorkload(property, kind) / REFERENCE_WORKLOAD[kind];
   let conditionFactor = 1 + Math.max(0, 55 - property.condition) / 100;
-  if (kind === 'mow' && property.grass > 100) conditionFactor *= 2;
-  else if (kind === 'mow' && property.grass > 80) conditionFactor *= 1.5;
+  // Langes und nasses Gras ist zäher, nicht nur mehr.
+  if (kind === 'mow' && property.grass > 100) conditionFactor *= 1.5;
+  else if (kind === 'mow' && property.grass > 80) conditionFactor *= 1.2;
   if (kind === 'mow' && property.moisture > 100) conditionFactor *= 1.4;
   // Eine Reparatur dauert länger als die reine Pflege.
   if (kind === 'maintain') conditionFactor *= 1 + brokenCount(property) * 0.6;
-  return Math.max(8, Math.round(base * sizeFactor * equipment.speed * conditionFactor));
+  return Math.max(8, Math.round(base * sizeFactor * equipment.speed * conditionFactor * load));
 }
 
 export function maintenanceCost(property: GardenProperty) {
@@ -517,9 +528,25 @@ export function maintenanceCost(property: GardenProperty) {
  */
 export const MAX_CUT = 66;
 
+/** Graslänge, bei der die Anzeige genau 100 % erreicht — dort endet ein Schnitt. */
+export const GRASS_FLOOR = 20;
+
+/**
+ * Wie viele Punkte eine Arbeit zurückzulegen hat, bis ihr Wert bei 100 % liegt.
+ * Jede Arbeit läuft bis dahin durch; abgebrochen wird nur von Hand.
+ */
+export function taskWorkload(property: GardenProperty, kind: TaskKind) {
+  if (kind === 'mow') return Math.max(0, property.grass - GRASS_FLOOR);
+  if (kind === 'water') return Math.max(0, 100 - property.moisture);
+  return Math.max(0, 100 - property.condition);
+}
+
+/** Pensum, bei dem die Arbeit genau die Grundzeit dauert. */
+const REFERENCE_WORKLOAD: Record<TaskKind, number> = { mow: MAX_CUT, water: 50, maintain: 58 };
+
 export function mowingPayout(property: GardenProperty, grass = property.grass) {
   const qualityBase = property.weedControl ? 1.08 : 1;
-  const cut = Math.max(0, Math.min(MAX_CUT, grass - 12));
+  const cut = Math.max(0, Math.min(MAX_CUT, grass - GRASS_FLOOR));
   return Math.round(property.payout * 1.2 * (cut / MAX_CUT) * qualityBase);
 }
 
@@ -578,15 +605,10 @@ function mowingWear(property: GardenProperty) {
  */
 function taskEffect(property: GardenProperty, kind: TaskKind): TaskEffect {
   if (kind === 'mow') {
-    return {
-      grass: -Math.max(0, property.grass - Math.max(12, property.grass - 66)),
-      condition: -mowingWear(property),
-    };
+    return { target: { key: 'grass', value: GRASS_FLOOR }, condition: -mowingWear(property) };
   }
-  if (kind === 'water') {
-    return { moisture: Math.max(0, 100 - property.moisture), condition: -0.8 };
-  }
-  return { condition: 58 + property.equipment.maintain * 12 };
+  if (kind === 'water') return { target: { key: 'moisture', value: 100 }, condition: -0.8 };
+  return { target: { key: 'condition', value: 100 } };
 }
 
 function createTask(
@@ -626,10 +648,18 @@ function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
   const step = progress - (task.effectProgress ?? 0);
   if (step <= 0) return;
 
+  const previous = task.effectProgress ?? 0;
   task.effectProgress = progress;
-  const { grass, moisture, condition } = task.effect;
-  if (grass) property.grass = clamp(property.grass + grass * step, 0, 150);
-  if (moisture) property.moisture = clamp(property.moisture + moisture * step, 0, 150);
+
+  const { target, condition } = task.effect;
+  if (target) {
+    // Anteil der noch offenen Strecke, der in diesem Schritt zurückgelegt wird.
+    // Beim letzten Schritt ist er 1, deshalb landet der Wert exakt auf dem Ziel.
+    const share = Math.min(1, step / Math.max(1e-9, 1 - previous));
+    const current = property[target.key];
+    const max = target.key === 'condition' ? 100 : 150;
+    property[target.key] = clamp(current + (target.value - current) * share, 0, max);
+  }
   if (condition) property.condition = clamp(property.condition + condition * step);
 }
 
@@ -896,8 +926,11 @@ export function migrateState(raw: GameState): GameState | undefined {
     if (property.task) {
       property.task.startGrass ??= property.grass;
       property.task.startMoisture ??= property.moisture;
-      property.task.effect ??= taskEffect(property, property.task.kind);
       property.task.effectProgress ??= 0;
+      // Vor Version 4 trug die Wirkung feste Mengen statt eines Ziels.
+      if (!property.task.effect?.target) {
+        property.task.effect = taskEffect(property, property.task.kind);
+      }
     }
   });
   state.version = SAVE_VERSION;
@@ -1007,6 +1040,9 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
   const manualBusy = state.properties.some((item) => item.task && taskBlocksPlayer(item.task));
   if (blocksPlayer && manualBusy) {
     return { state, message: 'Du bist bereits mit einer manuellen Aufgabe beschäftigt.' };
+  }
+  if (kind === 'mow' && property.grass <= GRASS_FLOOR) {
+    return { state, message: 'Der Rasen ist bereits kurz genug.' };
   }
   if (kind === 'water' && property.moisture >= 100) {
     return { state, message: 'Der Boden ist bereits optimal gewässert.' };
