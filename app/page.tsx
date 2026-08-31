@@ -618,7 +618,7 @@ function DetailHeader({ property }: { property: GardenProperty }) {
   return (
     <div className="relative min-h-[164px] overflow-hidden rounded-xl border border-border lg:flex-1">
       <img
-        src="/assets/garden-dashboard.png"
+        src={`${import.meta.env.BASE_URL}assets/garden-dashboard.png`}
         alt=""
         aria-hidden="true"
         className="absolute inset-0 size-full object-cover"
