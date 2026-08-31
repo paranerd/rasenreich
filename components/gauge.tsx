@@ -50,8 +50,10 @@ interface GaugeProps {
 }
 
 export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeProps) {
-  const clamped = Math.max(0, Math.min(100, value));
-  const rounded = Math.round(clamped);
+  // Der Balken endet bei 100 %, der abgelesene Wert nicht: Regen kann die
+  // Feuchtigkeit darueber treiben, und das soll sichtbar bleiben.
+  const fill = Math.max(0, Math.min(100, value));
+  const rounded = Math.round(Math.max(0, value));
   const tone = toneColor(kind, value);
   const text = label ?? TASK_LABELS[kind];
   const hint = metricHint(kind, value);
@@ -62,14 +64,14 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
         className={`relative h-[3px] overflow-hidden rounded-sm bg-track ${className ?? ''}`}
         role="meter"
         aria-valuemin={0}
-        aria-valuemax={100}
+        aria-valuemax={Math.max(100, rounded)}
         aria-valuenow={rounded}
         aria-label={`${text}: ${rounded} %`}
         title={`${text}: ${rounded} % — ${hint}`}
       >
         <div
           className="absolute inset-y-0 left-0"
-          style={{ width: `${clamped}%`, background: KIND_COLOR[kind] }}
+          style={{ width: `${fill}%`, background: KIND_COLOR[kind] }}
         />
       </div>
     );
@@ -84,7 +86,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
         className={`flex flex-col items-center gap-1.5 ${className ?? ''}`}
         role="meter"
         aria-valuemin={0}
-        aria-valuemax={100}
+        aria-valuemax={Math.max(100, rounded)}
         aria-valuenow={rounded}
         aria-label={`${text}: ${rounded} %`}
       >
@@ -113,7 +115,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
               stroke={KIND_COLOR[kind]}
               strokeWidth="7"
               strokeLinecap="butt"
-              strokeDasharray={`${(arc * clamped) / 100} ${circumference}`}
+              strokeDasharray={`${(arc * fill) / 100} ${circumference}`}
             />
           </svg>
           <div className="absolute inset-0 grid place-items-center">
@@ -137,7 +139,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
       className={`flex w-full flex-col gap-1.5 ${className ?? ''}`}
       role="meter"
       aria-valuemin={0}
-      aria-valuemax={100}
+      aria-valuemax={Math.max(100, rounded)}
       aria-valuenow={rounded}
       aria-label={`${text}: ${rounded} %`}
       title={hint}
@@ -154,7 +156,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
       <div className="relative h-[7px] overflow-hidden rounded bg-track">
         <div
           className="absolute inset-y-0 left-0 rounded"
-          style={{ width: `${clamped}%`, background: KIND_COLOR[kind] }}
+          style={{ width: `${fill}%`, background: KIND_COLOR[kind] }}
         />
       </div>
     </div>

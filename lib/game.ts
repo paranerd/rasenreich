@@ -379,6 +379,15 @@ export function taskPayout(property: GardenProperty, kind: TaskKind) {
   return 0;
 }
 
+/**
+ * Anteil am bestmöglichen Schnitt-Ertrag in Prozent. Die Anzeige spricht damit
+ * dieselbe Sprache wie die Gauges: 100 % ist optimal, 0 % ist schlecht.
+ */
+export function mowingPayoutShare(property: GardenProperty) {
+  const optimum = property.payout * 1.2 * (property.weedControl ? 1.08 : 1);
+  return Math.round((mowingPayout(property) / optimum) * 100);
+}
+
 export function isAutomated(property: GardenProperty, kind: TaskKind) {
   return Boolean(EQUIPMENT[kind][property.equipment[kind]].automated);
 }
@@ -874,7 +883,8 @@ export function resolveEvent(source: GameState): GameResult {
     state.reputation += 0.5;
   }
   state.activeEvent = undefined;
-  return { state, message: event.actionLabel ? 'Ereignis erfolgreich gelöst.' : 'Hinweis geschlossen.' };
+  // Ein blosses Wegklicken braucht keine Rueckmeldung — nur eine echte Handlung.
+  return { state, message: event.actionLabel ? 'Ereignis erfolgreich gelöst.' : undefined };
 }
 
 export function nextUnlockReputation(reputation: number) {

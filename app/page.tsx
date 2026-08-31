@@ -37,6 +37,7 @@ import {
   isAutomated,
   maintenanceCost,
   mowingPayout,
+  mowingPayoutShare,
   nextUnlockReputation,
   propertyMetricPercent,
   propertyStatus,
@@ -76,19 +77,24 @@ function satisfactionColorOnImage(value: number) {
   return '#eda694';
 }
 
-/** Welche Aufgabe der Betrieb als Nächstes braucht — steuert die hervorgehobene Schaltfläche. */
-function recommendedTask(property: GardenProperty): TaskKind {
+/**
+ * Welche Aufgabe der Betrieb als Nächstes braucht — steuert die hervorgehobene
+ * Schaltfläche. Ohne dringenden Bedarf bleibt keine Aktion hervorgehoben.
+ */
+function recommendedTask(property: GardenProperty): TaskKind | undefined {
   if (property.condition < 35) return 'maintain';
   if (property.moisture < 50) return 'water';
-  return 'mow';
+  if (property.grass >= 60) return 'mow';
+  return undefined;
 }
 
-/** Was der Kunde für den Schnitt zahlt, in der Sprache des Optimalfensters. */
+/** Was der Schnitt jetzt einbringt, gemessen am bestmöglichen Ertrag. */
 function payoutHint(property: GardenProperty) {
-  if (property.grass > 100) return 'Voll, aber −Zufriedenheit';
-  if (property.grass > 80) return 'Voll · +50 % Dauer';
-  if (property.grass >= 60) return '100 % · im Fenster';
-  return `${Math.round((property.grass / 60) * 100)} % · zu kurz`;
+  const share = `${mowingPayoutShare(property)} %`;
+  if (property.grass > 100) return `${share} · überwachsen`;
+  if (property.grass > 80) return `${share} · zu lang`;
+  if (property.grass >= 60) return `${share} · im Fenster`;
+  return `${share} · noch zu kurz`;
 }
 
 type FilterId = 'all' | 'due' | 'blocked' | 'auto';
@@ -496,7 +502,7 @@ function ToastCard({
 
   return (
     <div
-      className="rr-toast pointer-events-auto flex w-full max-w-[440px] flex-col overflow-hidden rounded-xl border bg-paper shadow-lg"
+      className="rr-toast pointer-events-auto flex w-full max-w-[440px] flex-col overflow-hidden rounded-[11px] border bg-paper shadow-lg"
       style={{ borderColor: border }}
     >
       <div className="flex items-center gap-2.5 py-2.5 pl-3 pr-2">
@@ -846,7 +852,11 @@ function ActionButtons({
     <div className="flex gap-2.5">
       {KINDS.map((kind) => {
         const automatic = isAutomated(property, kind);
-        const active = property.task?.kind === kind;
+        const running = property.task?.kind === kind ? property.task : undefined;
+        const active = Boolean(running);
+        const progress = running
+          ? Math.min(100, Math.max(0, ((Date.now() - running.startedAt) / (running.endsAt - running.startedAt)) * 100))
+          : 0;
         const disabled =
           Boolean(property.task) || (!automatic && manualBusy) || (property.condition <= 0 && kind !== 'maintain');
         const on = kind === recommended && !disabled;
@@ -862,29 +872,51 @@ function ActionButtons({
           <button
             key={kind}
             type="button"
-            className={`flex flex-1 items-center justify-center rounded-[9px] border transition-colors ${
+            className={`relative flex flex-1 items-center justify-center overflow-hidden rounded-[9px] border transition-colors ${
               compact ? 'min-h-11 px-1 text-[12.5px] font-semibold' : 'min-h-14 flex-col gap-1 px-1.5 py-2.5'
             }`}
             style={{
-              background: on ? 'var(--primary)' : 'var(--paper)',
-              color: on ? 'var(--paper)' : disabled ? '#a8ac9d' : 'var(--primary)',
-              borderColor: on ? 'var(--primary)' : disabled ? 'rgba(36,41,31,.12)' : 'rgba(63,107,40,.35)',
+              // Die laufende Aktion bleibt gesperrt, hebt sich aber vom stumpfen
+              // Grau der uebrigen gesperrten Schaltflaechen ab.
+              background: on ? 'var(--primary)' : active ? 'var(--secondary)' : 'var(--paper)',
+              color: on ? 'var(--paper)' : active ? 'var(--primary)' : disabled ? '#a8ac9d' : 'var(--primary)',
+              borderColor: on
+                ? 'var(--primary)'
+                : active
+                  ? 'rgba(63,107,40,.45)'
+                  : disabled
+                    ? 'rgba(36,41,31,.12)'
+                    : 'rgba(63,107,40,.35)',
               cursor: disabled ? 'default' : 'pointer',
             }}
             disabled={disabled}
             onClick={() => onStart(kind)}
           >
             <span className={compact ? 'whitespace-nowrap' : 'text-[13px] font-semibold leading-none'}>
-              {compact && active && property.task
-                ? formatDuration(property.task.endsAt - Date.now())
-                : ACTION_LABELS[kind]}
+              {compact && running ? formatDuration(running.endsAt - Date.now()) : ACTION_LABELS[kind]}
             </span>
             {!compact && (
               <span
                 className="whitespace-nowrap font-mono text-[9.5px] font-medium leading-none"
-                style={{ color: on ? 'rgba(255,253,247,.82)' : disabled ? '#b9bcae' : 'var(--ink-mute)' }}
+                style={{
+                  color: on
+                    ? 'rgba(255,253,247,.82)'
+                    : active
+                      ? 'var(--ink-soft)'
+                      : disabled
+                        ? '#b9bcae'
+                        : 'var(--ink-mute)',
+                }}
               >
-                {active && property.task ? formatDuration(property.task.endsAt - Date.now()) : meta}
+                {running ? formatDuration(running.endsAt - Date.now()) : meta}
+              </span>
+            )}
+            {running && (
+              <span className="absolute inset-x-0 bottom-0 h-[3px] bg-track" aria-hidden="true">
+                <span
+                  className="block h-full bg-primary transition-[width] duration-1000 ease-linear"
+                  style={{ width: `${progress}%` }}
+                />
               </span>
             )}
           </button>
@@ -1008,11 +1040,6 @@ function PropertyDetail({
   onUnlock: (kind: TaskKind) => void;
   onInstall: (kind: TaskKind) => void;
 }) {
-  const task = property.task;
-  const progress = task
-    ? Math.min(100, Math.max(0, ((Date.now() - task.startedAt) / (task.endsAt - task.startedAt)) * 100))
-    : 0;
-
   return (
     <section
       className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:overflow-hidden lg:p-[22px_26px]"
@@ -1055,19 +1082,6 @@ function PropertyDetail({
 
         <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
           <SectionLabel trailing={payoutHint(property)}>Aktion</SectionLabel>
-          {task && (
-            <div className="flex items-center gap-3">
-              <span className="relative h-1.5 flex-1 overflow-hidden rounded-sm bg-track">
-                <span
-                  className="absolute inset-y-0 left-0 rounded-sm bg-primary transition-[width] duration-1000"
-                  style={{ width: `${progress}%` }}
-                />
-              </span>
-              <span className="font-mono text-[11px] font-semibold leading-none text-ink-soft tabular-nums">
-                {ACTION_LABELS[task.kind]} · {formatDuration(task.endsAt - Date.now())}
-              </span>
-            </div>
-          )}
           <ActionButtons property={property} manualBusy={manualBusy} onStart={onStart} />
         </div>
 
