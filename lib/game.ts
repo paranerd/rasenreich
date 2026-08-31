@@ -325,7 +325,7 @@ const addLog = (
 };
 
 export function createInitialState(now = Date.now()): GameState {
-  return {
+  const state: GameState = {
     version: SAVE_VERSION,
     money: 240,
     reputation: 0,
@@ -343,9 +343,10 @@ export function createInitialState(now = Date.now()): GameState {
         drainage: 1,
         customerDemand: 0.9,
         grass: 63,
-        moisture: 58,
+        moisture: 88,
         condition: 94,
-        satisfaction: 86,
+        // Wird gleich durch den Zielwert ersetzt, damit der erste Eindruck stimmt.
+        satisfaction: 0,
         equipment: { mow: 0, water: 0, maintain: 0 },
         broken: { mow: false, water: false },
         fertilizer: false,
@@ -372,7 +373,38 @@ export function createInitialState(now = Date.now()): GameState {
       },
     ],
   };
+  state.properties.forEach((property) => {
+    property.satisfaction = satisfactionTarget(property);
+  });
+  return state;
 }
+
+/**
+ * Wie gut die Feuchtigkeit aus Kundensicht dasteht. Bis 100 zählt der Wert
+ * selbst, darüber wird Staunässe abgezogen — sonst wäre Überwässern gratis.
+ */
+export function moistureQuality(moisture: number) {
+  return moisture <= 100 ? clamp(moisture) : clamp(100 - (moisture - 100) * 1.6);
+}
+
+/**
+ * Der Kunde sieht den Schnitt jeden Tag, das Wasser hält den Rasen grün, der
+ * Zustand deiner Technik ist eigentlich dein Problem — schlägt aber über
+ * Verzögerungen und Ausfälle durch.
+ */
+const SATISFACTION_WEIGHTS: Record<TaskKind, number> = { mow: 0.55, water: 0.35, maintain: 0.1 };
+
+/** Wie zufrieden der Kunde bei diesem Zustand auf Dauer wäre. */
+export function satisfactionTarget(property: GardenProperty) {
+  return (
+    propertyMetricPercent(property, 'mow') * SATISFACTION_WEIGHTS.mow +
+    moistureQuality(property.moisture) * SATISFACTION_WEIGHTS.water +
+    property.condition * SATISFACTION_WEIGHTS.maintain
+  );
+}
+
+/** Anteil der Lücke zum Zielwert, der je Minute geschlossen wird. */
+const SATISFACTION_RATE = 0.3;
 
 export function isBroken(property: GardenProperty, kind?: TaskKind) {
   if (kind) return kind !== 'maintain' && property.broken[kind];
@@ -468,12 +500,19 @@ export function maintenanceCost(property: GardenProperty) {
   );
 }
 
-/** `grass` ist übergebbar, weil der Lohn beim Start eingefroren wird. */
+/**
+ * Bezahlt wird, was tatsächlich geschnitten wird — kein Optimalfenster mehr.
+ * Ein Schnitt nimmt höchstens 66 Punkte Graslänge ab; wer den Rasen darüber
+ * hinaus wachsen lässt, verdient nichts mehr dazu, zahlt aber mit Zeit,
+ * Verschleiß, Reputation und der Zufriedenheit des Kunden.
+ * `grass` ist übergebbar, weil der Lohn beim Start eingefroren wird.
+ */
+export const MAX_CUT = 66;
+
 export function mowingPayout(property: GardenProperty, grass = property.grass) {
   const qualityBase = property.weedControl ? 1.08 : 1;
-  if (grass < 60) return Math.round(property.payout * (grass / 60) * qualityBase);
-  if (grass <= 80) return Math.round(property.payout * 1.2 * qualityBase);
-  return Math.round(property.payout * qualityBase);
+  const cut = Math.max(0, Math.min(MAX_CUT, grass - 12));
+  return Math.round(property.payout * 1.2 * (cut / MAX_CUT) * qualityBase);
 }
 
 /** Bewaessern ist bezahlte Arbeitszeit — der Lohn steigt mit dem tatsaechlichen Wasserbedarf. */
@@ -493,9 +532,10 @@ export function taskPayout(property: GardenProperty, kind: TaskKind) {
  * Anteil am bestmöglichen Schnitt-Ertrag in Prozent. Die Anzeige spricht damit
  * dieselbe Sprache wie die Gauges: 100 % ist optimal, 0 % ist schlecht.
  */
+/** Anteil am vollen Schnitt in Prozent — 100 heißt: mehr geht nicht. */
 export function mowingPayoutShare(property: GardenProperty, grass = property.grass) {
-  const optimum = property.payout * 1.2 * (property.weedControl ? 1.08 : 1);
-  return Math.round((mowingPayout(property, grass) / optimum) * 100);
+  const full = property.payout * 1.2 * (property.weedControl ? 1.08 : 1);
+  return Math.round((mowingPayout(property, grass) / full) * 100);
 }
 
 export function isAutomated(property: GardenProperty, kind: TaskKind) {
@@ -603,23 +643,18 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
 
     rollFailure(state, property, 'mow', at);
 
-    if (grassBefore >= 60 && grassBefore <= 80) {
-      property.satisfaction = clamp(property.satisfaction + 5);
-      state.reputation += 2;
-    } else if (grassBefore < 60) {
-      property.satisfaction = clamp(property.satisfaction - 1.5);
-      state.reputation += 0.4;
-    } else if (grassBefore <= 100) {
-      property.satisfaction = clamp(property.satisfaction - (grassBefore - 80) * 0.3);
-      state.reputation += 0.6;
-    } else {
-      property.satisfaction = clamp(property.satisfaction - 12);
+    // Die Zufriedenheit ergibt sich aus den Werten selbst; hier zaehlt nur noch
+    // der Ruf: ein voller Schnitt bringt am meisten, ein verwilderter kostet.
+    const share = Math.min(1, mowingPayoutShare(property, grassBefore) / 100);
+    if (grassBefore > 100) {
       state.reputation = Math.max(0, state.reputation - 1.5);
+    } else {
+      state.reputation += 0.5 + 1.5 * share;
     }
     addLog(
       state,
       `${property.name}: Rasen gemäht, ${formatMoney(payout)} verdient.`,
-      grassBefore >= 60 && grassBefore <= 80 ? 'good' : 'neutral',
+      grassBefore > 100 ? 'warning' : 'good',
       at,
     );
   }
@@ -633,7 +668,6 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     state.lifetimeRevenue += remainingPayout;
     state.sessionRevenue += remainingPayout;
     property.lifetimeRevenue += remainingPayout;
-    if (before < 50) property.satisfaction = clamp(property.satisfaction + 2);
     rollFailure(state, property, 'water', at);
     addLog(
       state,
@@ -731,16 +765,17 @@ function advanceNaturalState(state: GameState, property: GardenProperty, seconds
 
   if (!property.task) property.condition = clamp(property.condition - 0.006 * minutes);
 
-  let satisfactionDelta = 0;
-  if (property.grass > 80) satisfactionDelta -= (property.grass - 80) * 0.0018 * minutes;
-  if (property.grass > 100) satisfactionDelta -= 0.07 * minutes;
-  if (property.moisture < 50) satisfactionDelta -= (50 - property.moisture) * 0.0016 * minutes;
-  if (property.moisture > 100) satisfactionDelta -= (property.moisture - 100) * 0.0014 * minutes;
-  if (property.moisture >= 50 && property.moisture <= 100 && property.grass <= 80) {
-    satisfactionDelta += 0.018 * minutes;
-  }
+  // Die Zufriedenheit folgt dem Zustand der drei Werte, aber träge. Der
+  // Anspruch des Kunden wirkt dabei einseitig: er sinkt schneller, als er sich
+  // erholt.
+  const target = satisfactionTarget(property);
+  const rate =
+    target < property.satisfaction
+      ? SATISFACTION_RATE * property.customerDemand
+      : SATISFACTION_RATE / property.customerDemand;
+  const step = Math.min(1, rate * minutes);
   property.satisfaction = clamp(
-    property.satisfaction + satisfactionDelta * property.customerDemand,
+    property.satisfaction + (target - property.satisfaction) * step,
   );
 }
 
@@ -1006,6 +1041,8 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
     completedJobs: 0,
     protected: false,
   });
+  const added = state.properties[state.properties.length - 1];
+  added.satisfaction = satisfactionTarget(added);
   state.offers = state.offers.filter((item) => item.id !== offerId);
   addLog(state, `${offer.name} ist jetzt ein neuer Stammkunde.`, 'good');
   return { state, message: `Vertrag mit ${offer.name} angenommen.` };
@@ -1123,9 +1160,7 @@ export function propertyStatus(property: GardenProperty) {
     const label = phase === 'setup' ? 'Rüsten' : phase === 'wrapup' ? 'Abschluss' : 'In Arbeit';
     return { label, tone: 'info' as const };
   }
-  if (property.grass >= 60 && property.grass <= 80) {
-    return { label: 'Mähbereit', tone: 'good' as const };
-  }
+  if (property.grass >= 60) return { label: 'Mähbereit', tone: 'good' as const };
   return { label: 'Im Plan', tone: 'neutral' as const };
 }
 

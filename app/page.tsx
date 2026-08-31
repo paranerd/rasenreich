@@ -90,11 +90,12 @@ function recommendedTask(property: GardenProperty): TaskKind | undefined {
 function payoutHint(property: GardenProperty) {
   const running = property.task?.kind === 'mow' ? property.task : undefined;
   const grass = running?.startGrass ?? property.grass;
-  const share = `${mowingPayoutShare(property, grass)} %`;
+  const value = mowingPayoutShare(property, grass);
+  const share = `${value} %`;
   if (grass > 100) return `${share} · überwachsen`;
-  if (grass > 80) return `${share} · zu lang`;
-  if (grass >= 60) return `${share} · im Fenster`;
-  return `${share} · noch zu kurz`;
+  if (value >= 100) return `${share} · voller Schnitt`;
+  if (value >= 55) return `${share} · lohnt sich`;
+  return `${share} · kaum gewachsen`;
 }
 
 type FilterId = 'all' | 'due' | 'blocked' | 'auto';
@@ -1098,7 +1099,7 @@ function OffersView({
                   <p className="stat__value">{offer.size.toLocaleString('de-DE')} m²</p>
                 </div>
                 <div className="stat">
-                  <span className="stat__label">Optimal</span>
+                  <span className="stat__label">Voller Schnitt</span>
                   <p className="stat__value">{formatMoney(offer.payout * 1.2)}</p>
                 </div>
               </div>

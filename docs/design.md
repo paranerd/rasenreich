@@ -18,14 +18,13 @@ Jedes Grundstück hat seinen eigenen Rasenmäher, Gartenschlauch, etc. Diese Din
 
 Anfangs mäht der Spieler manuell, dann bekommt er besseres Equipment, damit es einfacher wird und irgendwann automatisiert er die Aufgabe.
 
-Der Rasen wächst über Zeit. Es gibt ein optimales Zeitfenster / eine optimale Graslänge zum Mähen. Wird zu früh gemäht, geht der Mähvorgang zwar schneller, aber der Spieler bekommt auch nur anteilig Geld. Wird zu spät gemäht, dauert es länger, es gibt das volle Geld (nicht mehr), aber die Zufriedenheit des Kunden sinkt und somit die Reputation des Spielers. Außerdem erhöht sich der Verschleiß.
+Der Rasen wächst über Zeit. Ein optimales Fenster gibt es bewusst nicht: bezahlt wird, was tatsächlich geschnitten wird. Zu früh gemäht heißt schlicht wenig Geld für die volle Rüstzeit. Zu spät gemäht bringt kein Geld mehr dazu — ein Schnitt nimmt höchstens 66 Punkte Länge ab —, kostet aber Zeit, Verschleiß, Reputation und über den sinkenden Wert auch Kundenzufriedenheit.
 
 Beispiel:
 
-- **< 60:** Geld anteilig zur Länge, Mähdauer sinkt entsprechend
-- **60–80:** 100 % Geld + Zufriedenheitsbonus
-- **80–100:** volles Geld, Mähdauer +50 %, Zufriedenheit fällt proportional
-- **> 100:** verwildert — doppelte Mähdauer, dreifacher Zufriedenheitsverlust
+- **Ertrag:** anteilig zur geschnittenen Länge, gedeckelt bei 66 Punkten; darüber steigt nur noch der Aufwand
+- **> 80:** Mähdauer +50 %, erhöhter Verschleiß
+- **> 100:** verwildert — doppelte Mähdauer, deutlich mehr Verschleiß, Reputation sinkt statt zu steigen
 
 ## Bewässerung
 
@@ -125,14 +124,15 @@ Das Spiel soll auf HTML, TypeScript und SCSS basieren.
 - Der Gartenbauer stellt das Equipment auf jedem Grundstück selbst. Freischaltungen gelten global, die Anschaffung erfolgt anschließend pro Grundstück.
 - Grundstücke sind dauerhafte Kundenverträge. Angebote können angenommen oder abgelehnt werden.
 - Es gibt kein künstliches Vertragslimit. Zu viele Verträge können jedoch zu Überlastung und sinkender Kundenzufriedenheit führen.
-- Jedes Grundstück besitzt eine eigene Kundenzufriedenheit. Die globale Reputation ergibt sich aus guter Arbeit und schaltet bessere Angebote sowie Technik frei.
+- Jedes Grundstück besitzt eine eigene Kundenzufriedenheit. Sie ergibt sich direkt aus den drei Werten — 55 % Rasenschnitt, 35 % Bewässerung, 10 % Wartung — und folgt diesem Zielwert träge, damit sie nicht springt und Zeit zum Gegensteuern bleibt. Anspruchsvolle Kunden sinken schneller, als sie sich erholen.
+- Die globale Reputation ergibt sich aus guter Arbeit und schaltet bessere Angebote sowie Technik frei.
 - Bei starker Verwahrlosung können Verträge verloren gehen. Das erste Grundstück bleibt immer als Sicherheitsnetz erhalten.
 - Während der Offline-Zeit wird kein Vertrag direkt gekündigt. Kritische Verträge erhalten beim nächsten Besuch eine zehnminütige Rettungsfrist.
 - Geld kann nie negativ werden.
 
 ## Wirtschaft
 
-- Der Kunde bezahlt für das Mähen. Ein optimaler Pflegezeitpunkt erzeugt einen Qualitätsbonus.
+- Der Kunde bezahlt für das Mähen und für das Bewässern, jeweils anteilig zur geleisteten Arbeit.
 - Bewässerung und Wartung sichern zukünftige Mäherträge, bringen aber nicht direkt Geld ein.
 - Wartung kostet Geld und Zeit.
 - Geldbeträge bleiben als nachvollziehbare Eurobeträge dargestellt und können langfristig bis in den Millionenbereich wachsen.
@@ -170,6 +170,6 @@ Als Progressionsrichtwert startet der Spieler mit einem Grundstück, betreut im 
 - Desktop und Mobilgeräte werden gleichwertig unterstützt.
 - Der Hauptbildschirm bleibt auf Desktop möglichst ohne Seitenscrollen; einzelne Bereiche können intern scrollen.
 - Zustände werden als klar beschriftete Skalen und nicht als realistische Zentimeter- oder Prozentmesswerte kommuniziert.
-- Optimale Pflegefenster sind eindeutig sichtbar.
+- Alle Werte laufen auf einer Skala, auf der 100 % das Beste ist.
 - Der Spielstand wird lokal im Browser gespeichert. Ein Konto oder Backend ist zunächst nicht vorgesehen.
 - Musik und Sound gehören nicht zur ersten Version.
