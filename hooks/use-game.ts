@@ -10,6 +10,7 @@ import {
   GameState,
   installChemistry,
   installEquipment,
+  migrateState,
   OfflineSummary,
   resolveEvent,
   simulateGame,
@@ -64,9 +65,9 @@ export function useGame() {
       try {
         const saved = await getSaveStorage().read(STORAGE_KEY);
         if (saved) {
-          const parsed = JSON.parse(saved) as GameState;
-          if (parsed.version === 1) {
-            const result = simulateGame(parsed, Date.now(), true);
+          const migrated = migrateState(JSON.parse(saved) as GameState);
+          if (migrated) {
+            const result = simulateGame(migrated, Date.now(), true);
             initial = result.state;
             if (result.summary.elapsedMs >= 60_000) summary = result.summary;
           }

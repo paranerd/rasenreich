@@ -46,9 +46,10 @@ Geräte verschleißen mit der Zeit, mit Nutzung und auch einfach spontan durch u
 
 Beispiel:
 
-- **< 40:** Ausfallrisiko beginnt
-- **< 20:** 15 % Ausfallrisiko pro Nutzung
-- Kaputte Geräte blockieren das Grundstück vollständig bis zur Reparatur
+- **< 70:** Ausfallrisiko beginnt und wächst quadratisch mit dem Verschleiß
+- **0:** 22 % Ausfallrisiko pro Nutzung
+- Mäher und Bewässerung fallen einzeln aus; ein defektes Gerät sperrt nur seine eigene Aufgabe, die übrigen laufen weiter
+- Die Reparatur kostet Ersatzteile zusätzlich zur Wartungsrechnung und dauert länger — stetige Pflege ist immer günstiger als ein Ausfall
 
 ## Manuell vs Automatisiert
 

@@ -14,11 +14,13 @@ import {
   LayoutDashboard,
   LockKeyhole,
   RotateCcw,
+  Scissors,
   Settings2,
   ShoppingBag,
   Sparkles,
   Sun,
   Timer,
+  Wrench,
   X,
 } from 'lucide-react';
 
@@ -35,6 +37,7 @@ import {
   GameState,
   humanOfflineDuration,
   isAutomated,
+  isBroken,
   maintenanceCost,
   mowingPayout,
   mowingPayoutShare,
@@ -72,6 +75,7 @@ function satisfactionColorOnImage(value: number) {
  * Schaltfläche. Ohne dringenden Bedarf bleibt keine Aktion hervorgehoben.
  */
 function recommendedTask(property: GardenProperty): TaskKind | undefined {
+  if (isBroken(property)) return 'maintain';
   if (property.condition < 35) return 'maintain';
   if (property.moisture < 50) return 'water';
   if (property.grass >= 60) return 'mow';
@@ -90,7 +94,7 @@ function payoutHint(property: GardenProperty) {
 type FilterId = 'all' | 'due' | 'blocked' | 'auto';
 
 function isBlocked(property: GardenProperty) {
-  return property.condition <= 0 || Boolean(property.rescueUntil);
+  return isBroken(property) || Boolean(property.rescueUntil);
 }
 
 function isDue(property: GardenProperty) {
@@ -107,6 +111,23 @@ const FILTERS: Array<{ id: FilterId; label: string; match: (property: GardenProp
   { id: 'blocked', label: 'Blockiert', match: isBlocked },
   { id: 'auto', label: 'Automatik', match: isAuto },
 ];
+
+/** Auffällige Zustände, die im Grundstücks-Scroller ein Symbol verdienen. */
+function propertyFlags(property: GardenProperty) {
+  const flags: Array<{ id: string; Icon: typeof Wrench; tone: string; label: string }> = [];
+  if (property.rescueUntil) {
+    flags.push({ id: 'rescue', Icon: CircleAlert, tone: 'danger', label: 'Vertrag gefährdet' });
+  }
+  if (isBroken(property)) {
+    flags.push({ id: 'broken', Icon: Wrench, tone: 'danger', label: 'Gerät ausgefallen' });
+  } else if (property.condition < 45) {
+    flags.push({ id: 'wear', Icon: Wrench, tone: 'warning', label: 'Wartung fällig' });
+  }
+  if (isDue(property)) {
+    flags.push({ id: 'due', Icon: Scissors, tone: 'good', label: 'Mähbereit' });
+  }
+  return flags;
+}
 
 function StatusChip({ property }: { property: GardenProperty }) {
   const status = propertyStatus(property);
@@ -608,15 +629,23 @@ function PropertyRail({
             <span className="rail__head">
               <StatusDot property={property} />
               <span className="rail__name">{property.name}</span>
-            </span>
-            <span className="rail__dots" aria-hidden="true">
-              {KINDS.map((kind) => (
+              <span className="rail__flags">
+                {propertyFlags(property).map(({ id, Icon, tone, label }) => (
+                  <Icon key={id} className={`rail__flag tone--${tone}`} aria-label={label}>
+                    <title>{label}</title>
+                  </Icon>
+                ))}
                 <span
-                  key={kind}
-                  className={`rail__dot kind--${kind} ${
-                    propertyMetricPercent(property, kind) < 25 ? 'rail__dot--low' : ''
-                  }`}
-                />
+                  className="rail__score"
+                  style={{ color: satisfactionColor(property.satisfaction) }}
+                >
+                  {Math.round(property.satisfaction)} %
+                </span>
+              </span>
+            </span>
+            <span className="rail__gauges" aria-hidden="true">
+              {KINDS.map((kind) => (
+                <Gauge key={kind} kind={kind} value={propertyMetricPercent(property, kind)} variant="mini" />
               ))}
             </span>
           </button>
@@ -702,8 +731,8 @@ function ActionButtons({
         const progress = running
           ? Math.min(100, Math.max(0, ((Date.now() - running.startedAt) / (running.endsAt - running.startedAt)) * 100))
           : 0;
-        const disabled =
-          Boolean(property.task) || (!automatic && manualBusy) || (property.condition <= 0 && kind !== 'maintain');
+        const broken = isBroken(property, kind);
+        const disabled = Boolean(property.task) || (!automatic && manualBusy) || broken;
         const on = kind === recommended && !disabled;
         const duration = formatDuration(taskDuration(property, kind) * 1_000);
         const meta =
@@ -719,16 +748,20 @@ function ActionButtons({
             type="button"
             className={`action ${compact ? 'action--compact' : ''} ${on ? 'action--on' : ''} ${
               running ? 'action--running' : ''
-            }`}
+            } ${broken ? 'action--broken' : ''}`}
             disabled={disabled}
             onClick={() => onStart(kind)}
           >
             <span className="action__label">
-              {compact && running ? formatDuration(running.endsAt - Date.now()) : ACTION_LABELS[kind]}
+              {compact && running
+                ? formatDuration(running.endsAt - Date.now())
+                : compact && broken
+                  ? 'Defekt'
+                  : ACTION_LABELS[kind]}
             </span>
             {!compact && (
               <span className="action__meta">
-                {running ? formatDuration(running.endsAt - Date.now()) : meta}
+                {running ? formatDuration(running.endsAt - Date.now()) : broken ? 'Defekt' : meta}
               </span>
             )}
             {running && (

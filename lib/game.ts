@@ -1,4 +1,7 @@
 export type TaskKind = 'mow' | 'water' | 'maintain';
+/** Wartung selbst kann nicht ausfallen — sonst gäbe es keinen Weg zurück. */
+export type BreakableKind = 'mow' | 'water';
+export const BREAKABLE: BreakableKind[] = ['mow', 'water'];
 export type ViewName = 'overview' | 'offers' | 'upgrades';
 
 export interface EquipmentLevel {
@@ -38,6 +41,8 @@ export interface GardenProperty {
   condition: number;
   satisfaction: number;
   equipment: Record<TaskKind, number>;
+  /** Ausgefallene Geräte. Ein defektes Gerät sperrt nur seine eigene Aufgabe. */
+  broken: Record<BreakableKind, boolean>;
   fertilizer: boolean;
   weedControl: boolean;
   task?: PropertyTask;
@@ -77,8 +82,10 @@ export interface GameLog {
   tone: 'good' | 'neutral' | 'warning';
 }
 
+export const SAVE_VERSION = 2;
+
 export interface GameState {
-  version: 1;
+  version: number;
   money: number;
   reputation: number;
   lifetimeRevenue: number;
@@ -297,7 +304,7 @@ const addLog = (
 
 export function createInitialState(now = Date.now()): GameState {
   return {
-    version: 1,
+    version: SAVE_VERSION,
     money: 240,
     reputation: 0,
     lifetimeRevenue: 0,
@@ -318,6 +325,7 @@ export function createInitialState(now = Date.now()): GameState {
         condition: 94,
         satisfaction: 86,
         equipment: { mow: 0, water: 0, maintain: 0 },
+        broken: { mow: false, water: false },
         fertilizer: false,
         weedControl: false,
         lifetimeRevenue: 0,
@@ -344,6 +352,36 @@ export function createInitialState(now = Date.now()): GameState {
   };
 }
 
+export function isBroken(property: GardenProperty, kind?: TaskKind) {
+  if (kind) return kind !== 'maintain' && property.broken[kind];
+  return BREAKABLE.some((entry) => property.broken[entry]);
+}
+
+export function brokenCount(property: GardenProperty) {
+  return BREAKABLE.filter((entry) => property.broken[entry]).length;
+}
+
+/**
+ * Ausfallrisiko eines Geräts bei einem Einsatz. Ab Zustand 70 ist es null und
+ * wächst darunter quadratisch — wer regelmäßig wartet, erlebt keine Ausfälle.
+ */
+export function failureRisk(property: GardenProperty, kind: TaskKind) {
+  if (kind === 'maintain' || property.broken[kind]) return 0;
+  const wear = Math.max(0, 70 - property.condition) / 70;
+  return 0.22 * wear * wear;
+}
+
+/**
+ * Ersatzteile für ein ausgefallenes Gerät. Sie kommen zur normalen
+ * Wartungsrechnung dazu und machen den Ausfall deutlich teurer als jede Pflege
+ * davor — die Instandhaltung ist mit 0,70 € pro Zustandspunkt linear.
+ */
+const PARTS_BASE: Record<BreakableKind, number> = { mow: 90, water: 60 };
+
+export function partsCost(property: GardenProperty, kind: BreakableKind) {
+  return Math.round(PARTS_BASE[kind] * Math.pow(property.size / 120, 0.4));
+}
+
 export function taskDuration(property: GardenProperty, kind: TaskKind) {
   const base = kind === 'mow' ? 30 : kind === 'water' ? 45 : 60;
   const sizeFactor = Math.pow(property.size / 120, 0.56);
@@ -352,11 +390,23 @@ export function taskDuration(property: GardenProperty, kind: TaskKind) {
   if (kind === 'mow' && property.grass > 100) conditionFactor *= 2;
   else if (kind === 'mow' && property.grass > 80) conditionFactor *= 1.5;
   if (kind === 'mow' && property.moisture > 100) conditionFactor *= 1.4;
+  // Eine Reparatur dauert länger als die reine Pflege.
+  if (kind === 'maintain') conditionFactor *= 1 + brokenCount(property) * 0.6;
   return Math.max(8, Math.round(base * sizeFactor * equipment.speed * conditionFactor));
 }
 
 export function maintenanceCost(property: GardenProperty) {
-  return Math.max(8, Math.round((100 - property.condition) * 0.7 * Math.pow(property.size / 120, 0.25)));
+  const upkeep = Math.max(
+    8,
+    Math.round((100 - property.condition) * 0.7 * Math.pow(property.size / 120, 0.25)),
+  );
+  return (
+    upkeep +
+    BREAKABLE.reduce(
+      (sum, kind) => (property.broken[kind] ? sum + partsCost(property, kind) : sum),
+      0,
+    )
+  );
 }
 
 export function mowingPayout(property: GardenProperty) {
@@ -392,6 +442,20 @@ export function isAutomated(property: GardenProperty, kind: TaskKind) {
   return Boolean(EQUIPMENT[kind][property.equipment[kind]].automated);
 }
 
+/** Ein Einsatz kann das benutzte Gerät zerlegen — je schlechter gewartet, desto eher. */
+function rollFailure(state: GameState, property: GardenProperty, kind: TaskKind, at: number) {
+  if (kind === 'maintain' || property.broken[kind]) return;
+  if (Math.random() >= failureRisk(property, kind)) return;
+  property.broken[kind] = true;
+  property.condition = clamp(property.condition - 12);
+  addLog(
+    state,
+    `${property.name}: ${EQUIPMENT[kind][property.equipment[kind]].name} ist ausgefallen und muss repariert werden.`,
+    'warning',
+    at,
+  );
+}
+
 function completeTask(state: GameState, property: GardenProperty, at: number) {
   const task = property.task;
   if (!task) return;
@@ -412,11 +476,7 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     property.grass = Math.max(12, grassBefore - 66);
     property.condition = clamp(property.condition - wear);
 
-    const failureRisk = property.condition < 20 ? 0.15 : property.condition < 50 ? 0.04 : 0;
-    if (failureRisk > 0 && Math.random() < failureRisk) {
-      property.condition = 0;
-      addLog(state, `${property.name}: Der Mäher ist ausgefallen und muss repariert werden.`, 'warning', at);
-    }
+    rollFailure(state, property, 'mow', at);
 
     if (grassBefore >= 60 && grassBefore <= 80) {
       property.satisfaction = clamp(property.satisfaction + 5);
@@ -451,6 +511,7 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     property.moisture = 100;
     property.condition = clamp(property.condition - 0.8);
     if (before < 50) property.satisfaction = clamp(property.satisfaction + 2);
+    rollFailure(state, property, 'water', at);
     addLog(
       state,
       `${property.name}: Bewässerung abgeschlossen, ${formatMoney(payout)} verdient.`,
@@ -461,8 +522,17 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
 
   if (task.kind === 'maintain') {
     const level = property.equipment.maintain;
+    const repaired = brokenCount(property);
     property.condition = clamp(property.condition + 58 + level * 12);
-    addLog(state, `${property.name}: Geräte sind wieder einsatzbereit.`, 'good', at);
+    property.broken = { mow: false, water: false };
+    addLog(
+      state,
+      repaired > 0
+        ? `${property.name}: ${repaired === 1 ? 'Das Gerät ist' : 'Die Geräte sind'} repariert.`
+        : `${property.name}: Geräte sind wieder einsatzbereit.`,
+      'good',
+      at,
+    );
   }
 
   property.task = undefined;
@@ -515,16 +585,15 @@ function startAutomatedTask(state: GameState, property: GardenProperty, kind: Ta
 
 function tryAutomation(state: GameState, property: GardenProperty, at: number) {
   if (property.task) return;
-  if (isAutomated(property, 'maintain') && property.condition <= 48) {
+  if (isAutomated(property, 'maintain') && (property.condition <= 48 || isBroken(property))) {
     startAutomatedTask(state, property, 'maintain', at);
     return;
   }
-  if (property.condition <= 0) return;
-  if (isAutomated(property, 'water') && property.moisture <= 55) {
+  if (isAutomated(property, 'water') && !property.broken.water && property.moisture <= 55) {
     startAutomatedTask(state, property, 'water', at);
     return;
   }
-  if (isAutomated(property, 'mow') && property.grass >= 64) {
+  if (isAutomated(property, 'mow') && !property.broken.mow && property.grass >= 64) {
     startAutomatedTask(state, property, 'mow', at);
   }
 }
@@ -647,6 +716,21 @@ function triggerEvent(state: GameState, now: number) {
   addLog(state, `${event.title}: ${event.description}`, type === 'review' ? 'good' : 'warning', now);
 }
 
+/**
+ * Bringt einen gespeicherten Stand auf die aktuelle Fassung. Version 1 kannte
+ * nur den Totalausfall über Zustand 0; daraus werden beide Geräte defekt.
+ */
+export function migrateState(raw: GameState): GameState | undefined {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.properties)) return undefined;
+  if (raw.version !== 1 && raw.version !== SAVE_VERSION) return undefined;
+  const state = clone(raw);
+  state.properties.forEach((property) => {
+    property.broken ??= { mow: property.condition <= 0, water: property.condition <= 0 };
+  });
+  state.version = SAVE_VERSION;
+  return state;
+}
+
 export function simulateGame(source: GameState, now = Date.now(), offline = false) {
   const state = clone(source);
   state.money = Math.round(state.money);
@@ -718,8 +802,9 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
   const property = state.properties.find((item) => item.id === propertyId);
   if (!property) return { state, message: 'Grundstück nicht gefunden.' };
   if (property.task) return { state, message: 'Auf diesem Grundstück läuft bereits eine Aufgabe.' };
-  if (property.condition <= 0 && kind !== 'maintain') {
-    return { state, message: 'Die Geräte müssen zuerst repariert werden.' };
+  if (isBroken(property, kind)) {
+    const name = EQUIPMENT[kind][property.equipment[kind]].name;
+    return { state, message: `${name} ist ausgefallen — erst reparieren.` };
   }
 
   const equipment = EQUIPMENT[kind][property.equipment[kind]];
@@ -732,7 +817,7 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
   if (kind === 'water' && property.moisture >= 100) {
     return { state, message: 'Der Boden ist bereits optimal gewässert.' };
   }
-  if (kind === 'maintain' && property.condition >= 98) {
+  if (kind === 'maintain' && property.condition >= 98 && !isBroken(property)) {
     return { state, message: 'Die Geräte sind bereits in bestem Zustand.' };
   }
 
@@ -780,6 +865,7 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
     condition: 88,
     satisfaction: 78,
     equipment: { mow: 0, water: 0, maintain: 0 },
+    broken: { mow: false, water: false },
     fertilizer: false,
     weedControl: false,
     lifetimeRevenue: 0,
@@ -894,6 +980,7 @@ export function nextUnlockReputation(reputation: number) {
 
 export function propertyStatus(property: GardenProperty) {
   if (property.rescueUntil) return { label: 'Kritisch', tone: 'danger' as const };
+  if (isBroken(property)) return { label: 'Defekt', tone: 'danger' as const };
   if (property.condition < 50 || property.satisfaction <= 25) {
     return { label: 'Achtung', tone: 'warning' as const };
   }
@@ -927,10 +1014,11 @@ export function moistureHint(value: number) {
   return 'Gefahr von Staunässe';
 }
 
+/** Die Schwellen folgen `failureRisk`: ab 70 ist ein Ausfall ausgeschlossen. */
 export function conditionHint(value: number) {
-  if (value < 20) return 'Ausfallgefahr';
-  if (value < 50) return 'Erhöhtes Ausfallrisiko';
-  if (value < 75) return 'Gebraucht';
+  if (value < 20) return 'Akute Ausfallgefahr';
+  if (value < 45) return 'Hohes Ausfallrisiko';
+  if (value < 70) return 'Wartung fällig';
   return 'Einsatzbereit';
 }
 

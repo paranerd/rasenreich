@@ -131,12 +131,15 @@
   }
 }
 
+/// Die Kachel trägt links den Namen, rechts oben die Zufriedenheit und davor,
+/// von rechts hereinwachsend, die Symbole auffälliger Zustände.
 .rail__item {
   display: flex;
   flex-shrink: 0;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 7px;
+  min-width: 178px;
+  padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--border-hair);
   border-radius: var(--radius-lg);
@@ -154,25 +157,43 @@
 }
 
 .rail__name {
+  @include truncate;
+
+  flex: 1;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
   color: var(--ink);
-  white-space: nowrap;
 }
 
-.rail__dots {
+.rail__flags {
   display: flex;
-  gap: 3px;
+  flex-shrink: 0;
+  gap: 5px;
+  align-items: center;
 }
 
-.rail__dot {
-  width: 9px;
-  height: 9px;
-  background: var(--kind);
-  border-radius: 2px;
+.rail__flag {
+  width: 12px;
+  height: 12px;
+  color: var(--tone);
 }
 
-.rail__dot--low {
-  opacity: 0.45;
+.rail__score {
+  @include num;
+
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/// Drei Balken statt drei Kästchen: die Füllung zeigt den Wert selbst.
+.rail__gauges {
+  display: flex;
+  gap: 4px;
+
+  .gauge--mini {
+    width: 26px;
+    height: 4px;
+  }
 }

@@ -322,6 +322,13 @@
   border-color: var(--primary-line-strong);
 }
 
+/// Ausgefallenes Gerät: gesperrt, aber als Schaden erkennbar.
+.action--broken:disabled {
+  color: var(--tone-bad);
+  background: var(--bg-bad);
+  border-color: var(--line-bad);
+}
+
 /// Die eine wirklich fällige Aktion.
 .action--on {
   color: var(--primary-contrast);
@@ -354,6 +361,10 @@
 
   .action--running & {
     color: var(--ink-soft);
+  }
+
+  .action--broken & {
+    color: color-mix(in oklab, var(--tone-bad) 75%, transparent);
   }
 
   .action--on & {
