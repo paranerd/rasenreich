@@ -301,14 +301,18 @@
     transform 0.06s;
   -webkit-tap-highlight-color: transparent;
 
-  &:hover:not(:disabled) {
+  /// Die laufende Aktion ist ausgenommen: ihr Hintergrund ist der Fortschritt.
+  &:hover:not(:disabled):not(.action--running) {
     background: var(--highlight);
     border-color: var(--primary-line-strong);
   }
 
+  &:active:not(:disabled):not(.action--running) {
+    background: var(--highlight-hover);
+  }
+
   /// Auch auf dem Touchscreen soll der Druck sichtbar sein.
   &:active:not(:disabled) {
-    background: var(--highlight-hover);
     transform: translateY(1px);
   }
 
@@ -334,16 +338,15 @@
   background: var(--paper);
   border-color: var(--primary-line-strong);
 
-  /// Der Griff zum Abbrechen darf sich als solcher anfühlen.
+}
+
+/// Der Griff zum Abbrechen darf sich als solcher anfühlen — aber nur über
+/// Schrift und Rahmen, damit der Fortschritt dahinter sichtbar bleibt.
+.action--cancellable {
   &:hover,
   &:active {
     color: var(--tone-bad);
-    background: var(--paper);
-    border-color: var(--line-bad);
-  }
-
-  &:active {
-    background: var(--bg-bad);
+    border-color: var(--tone-bad);
   }
 }
 

@@ -45,6 +45,8 @@ export interface PropertyTask {
   effect?: TaskEffect;
   /** Anteil der Wirkung, der bereits eingeflossen ist (0 bis 1). */
   effectProgress?: number;
+  /** Abgebrochen — es läuft nur noch der Abschluss, ohne weitere Wirkung. */
+  cancelled?: boolean;
 }
 
 export interface GardenProperty {
@@ -612,7 +614,7 @@ function createTask(
 /** Lässt die Werte während der Arbeit mitlaufen, statt erst am Ende zu springen. */
 function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
   const task = property.task;
-  if (!task?.effect) return;
+  if (!task?.effect || task.cancelled) return;
   const { from, to } = taskWorkWindow(task);
   const progress = clamp((Math.min(intervalEnd, to) - from) / Math.max(1, to - from), 0, 1);
   const step = progress - (task.effectProgress ?? 0);
@@ -628,6 +630,14 @@ function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
 function completeTask(state: GameState, property: GardenProperty, at: number) {
   const task = property.task;
   if (!task) return;
+
+  // Eine abgebrochene Aufgabe wird nur noch aufgeräumt: kein Restlohn, kein
+  // gezählter Schnitt, keine Reputation, keine Reparatur.
+  if (task.cancelled) {
+    property.task = undefined;
+    addLog(state, `${property.name}: ${TASK_LABELS[task.kind]} beendet.`, 'neutral', at);
+    return;
+  }
 
   if (task.kind === 'mow') {
     // Der Rasen ist bereits geschnitten; bewertet wird der Zustand von vorher.
@@ -691,7 +701,6 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
   }
 
   property.task = undefined;
-  if (property.satisfaction > 20) property.rescueUntil = undefined;
 }
 
 function accrueTaskRevenue(
@@ -701,7 +710,7 @@ function accrueTaskRevenue(
   intervalEnd: number,
 ) {
   const task = property.task;
-  if (!task || task.kind === 'maintain') return;
+  if (!task || task.kind === 'maintain' || task.cancelled) return;
 
   const payoutTotal = task.payoutTotal ?? taskPayout(property, task.kind);
   const { from, to } = taskWorkWindow(task);
@@ -777,6 +786,9 @@ function advanceNaturalState(state: GameState, property: GardenProperty, seconds
   property.satisfaction = clamp(
     property.satisfaction + (target - property.satisfaction) * step,
   );
+  // Erholt sich der Kunde wieder, ist die Frist vom Tisch — unabhaengig davon,
+  // ob gerade eine Aufgabe fertig geworden ist.
+  if (property.rescueUntil && property.satisfaction > 20) property.rescueUntil = undefined;
 }
 
 function createOffer(state: GameState, now: number): ContractOffer | undefined {
@@ -996,18 +1008,27 @@ export function cancelTask(source: GameState, propertyId: string): GameResult {
   if (!property?.task) return { state, message: 'Hier läuft gerade keine Aufgabe.' };
 
   const task = property.task;
-  const progress = clamp(
-    (Date.now() - task.startedAt) / Math.max(1, task.endsAt - task.startedAt),
-    0,
-    1,
-  );
-  const refund = Math.round(task.cost * (1 - progress));
+  const now = Date.now();
+  if (taskPhase(task, now) === 'wrapup') {
+    return { state, message: 'Der Abschluss lässt sich nicht mehr abbrechen.' };
+  }
+
+  const { from, to } = taskWorkWindow(task);
+  const worked = clamp((Math.min(now, to) - from) / Math.max(1, to - from), 0, 1);
+  const refund = Math.round(task.cost * (1 - worked));
   state.money += refund;
-  property.task = undefined;
+
+  // Aufgeräumt wird trotzdem: die Aufgabe springt in den Abschluss und friert
+  // Wirkung und Lohn auf dem erreichten Stand ein.
+  task.cancelled = true;
+  task.workEndsAt = Math.min(now, to);
+  task.workStartsAt = Math.min(from, task.workEndsAt);
+  task.endsAt = now + taskWrapUpDuration(property, task.kind) * 1_000;
+
   addLog(state, `${property.name}: ${TASK_LABELS[task.kind]} abgebrochen.`, 'warning');
   return {
     state,
-    message: refund > 0 ? `Abgebrochen · ${formatMoney(refund)} zurück.` : 'Aufgabe abgebrochen.',
+    message: refund > 0 ? `Abgebrochen · ${formatMoney(refund)} zurück.` : 'Abgebrochen.',
   };
 }
 
@@ -1157,7 +1178,8 @@ export function propertyStatus(property: GardenProperty) {
   }
   if (property.task) {
     const phase = taskPhase(property.task);
-    const label = phase === 'setup' ? 'Rüsten' : phase === 'wrapup' ? 'Abschluss' : 'In Arbeit';
+    const label =
+      phase === 'setup' ? 'Vorbereiten' : phase === 'wrapup' ? 'Abschluss' : 'In Arbeit';
     return { label, tone: 'info' as const };
   }
   if (property.grass >= 60) return { label: 'Mähbereit', tone: 'good' as const };

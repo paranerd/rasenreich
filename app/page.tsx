@@ -42,6 +42,7 @@ import {
   mowingPayoutShare,
   nextUnlockReputation,
   propertyMetricPercent,
+  PropertyTask,
   propertyStatus,
   TASK_LABELS,
   taskBlocksPlayer,
@@ -80,6 +81,14 @@ function recommendedTask(property: GardenProperty): TaskKind | undefined {
   if (property.moisture < 50) return 'water';
   if (property.grass >= 60) return 'mow';
   return undefined;
+}
+
+/** Was der Betrieb gerade tut — Vorbereiten, die Arbeit selbst, Abschließen. */
+function taskPhaseLabel(task: PropertyTask) {
+  const phase = taskPhase(task);
+  if (phase === 'setup') return 'Vorbereiten';
+  if (phase === 'wrapup') return 'Abschluss';
+  return ACTION_LABELS[task.kind];
 }
 
 /**
@@ -204,18 +213,19 @@ function ActivityButton({
   onOpen: () => void;
 }) {
   const task = activeProperty?.task;
-  const busy = Boolean(task);
+  // Eine Automatik bindet dich nicht — dann bist du trotz laufender Arbeit frei.
+  const busy = Boolean(task && taskBlocksPlayer(task));
 
   return (
     <button
       type="button"
       className={`activity ${busy ? 'activity--busy' : ''}`}
-      disabled={!busy}
+      disabled={!task}
       onClick={onOpen}
-      title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
+      title={task ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
     >
       <span className={`activity__dot ${busy ? 'pulse' : ''}`} aria-hidden="true" />
-      <span className="activity__state">{busy ? 'Beschäftigt' : 'Verfügbar'}</span>
+      <span className="activity__state">{busy && task ? taskPhaseLabel(task) : 'Verfügbar'}</span>
       {task && <span className="activity__time">{formatDuration(task.endsAt - Date.now())}</span>}
     </button>
   );
@@ -744,15 +754,14 @@ function ActionButtons({
           ? Math.min(100, Math.max(0, ((Date.now() - running.startedAt) / (running.endsAt - running.startedAt)) * 100))
           : 0;
         const broken = isBroken(property, kind);
-        // Die laufende Aufgabe bleibt bedienbar — ein Klick bricht sie ab.
-        const disabled = !running && (Boolean(property.task) || (!automatic && manualBusy) || broken);
+        // Bis zum Abschluss bleibt die laufende Aufgabe bedienbar — ein Klick
+        // bricht sie ab. Der Abschluss selbst läuft in jedem Fall zu Ende.
+        const cancellable = Boolean(running) && taskPhase(running!) !== 'wrapup';
+        const disabled =
+          !cancellable && (Boolean(property.task) || (!automatic && manualBusy) || broken);
         // Die laufende Aktion traegt ihre eigene Darstellung, nicht die der Empfehlung.
         const on = kind === recommended && !disabled && !running;
         const duration = formatDuration(taskTotalDuration(property, kind) * 1_000);
-        // Rüsten und Abschließen kosten eigene Zeit und heißen auch so.
-        const phase = running ? taskPhase(running) : undefined;
-        const phaseLabel =
-          phase === 'setup' ? 'Rüsten' : phase === 'wrapup' ? 'Abschluss' : ACTION_LABELS[kind];
         const meta =
           kind === 'mow'
             ? `+${formatMoney(mowingPayout(property))} · ${duration}`
@@ -766,10 +775,10 @@ function ActionButtons({
             type="button"
             className={`action ${compact ? 'action--compact' : ''} ${on ? 'action--on' : ''} ${
               running ? 'action--running' : ''
-            } ${broken ? 'action--broken' : ''}`}
+            } ${cancellable ? 'action--cancellable' : ''} ${broken ? 'action--broken' : ''}`}
             disabled={disabled}
-            title={running ? `${ACTION_LABELS[kind]} abbrechen` : undefined}
-            onClick={() => (running ? onCancel() : onStart(kind))}
+            title={cancellable ? `${ACTION_LABELS[kind]} abbrechen` : undefined}
+            onClick={() => (cancellable ? onCancel() : onStart(kind))}
           >
             {running && (
               // Zählt rückwärts: die gefüllte Fläche ist die verbleibende Arbeit.
@@ -780,11 +789,13 @@ function ActionButtons({
               />
             )}
             <span className="action__label">
-              {running ? (
+              {cancellable && running ? (
                 <>
                   <X className="action__cancel" aria-hidden="true" />
                   {compact ? formatDuration(running.endsAt - Date.now()) : 'Abbrechen'}
                 </>
+              ) : running && compact ? (
+                formatDuration(running.endsAt - Date.now())
               ) : compact && broken ? (
                 'Defekt'
               ) : (
@@ -794,7 +805,7 @@ function ActionButtons({
             {!compact && (
               <span className="action__meta">
                 {running
-                  ? `${phaseLabel} · ${formatDuration(running.endsAt - Date.now())}`
+                  ? `${taskPhaseLabel(running)} · ${formatDuration(running.endsAt - Date.now())}`
                   : broken
                     ? 'Defekt'
                     : meta}
