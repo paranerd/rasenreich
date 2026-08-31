@@ -1,0 +1,99 @@
+@use 'mixins' as *;
+
+/// Die Füllung folgt `--kind` aus der Aufgaben-Klasse (siehe _status.scss).
+/// Der Balken endet bei 100 %, der abgelesene Wert nicht: Regen kann die
+/// Feuchtigkeit darüber treiben, und das soll sichtbar bleiben.
+.gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.gauge__head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.gauge__label {
+  @include label(9.5px, 0.1em);
+}
+
+.gauge__value {
+  @include num;
+
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.gauge__track {
+  position: relative;
+  height: 7px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 4px;
+}
+
+.gauge__fill {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  background: var(--kind);
+  border-radius: 4px;
+}
+
+/// Zeilenvariante der Desktop-Liste: nur der nackte Balken.
+.gauge--mini {
+  display: block;
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: var(--radius-sm);
+}
+
+.gauge--ring {
+  gap: 6px;
+  width: auto;
+  align-items: center;
+}
+
+.gauge__dial {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+/// 270-Grad-Bogen, gedreht bis die Lücke unten sitzt.
+.gauge__dial-svg {
+  transform: rotate(135deg);
+}
+
+.gauge__dial-value {
+  @include num;
+
+  position: absolute;
+  inset: 0;
+  display: grid;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  place-items: center;
+}
+
+.gauge__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  text-align: center;
+}
+
+.gauge__hint {
+  font-size: 9px;
+  line-height: 1.3;
+}

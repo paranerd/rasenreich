@@ -1,0 +1,69 @@
+// Die zwei Umbrüche des Entwurfs: sm für die Kartenraster, lg für die
+// eigenständige Desktop-Ansicht. Alles dazwischen bleibt die mobile Ansicht.
+@mixin sm {
+  @media (min-width: 40rem) {
+    @content;
+  }
+}
+
+@mixin md {
+  @media (min-width: 48rem) {
+    @content;
+  }
+}
+
+@mixin lg {
+  @media (min-width: 64rem) {
+    @content;
+  }
+}
+
+@mixin xl {
+  @media (min-width: 80rem) {
+    @content;
+  }
+}
+
+/// Nur mobil sichtbar — das Gegenstück zu `lg`.
+@mixin below-lg {
+  @media (max-width: 63.999rem) {
+    @content;
+  }
+}
+
+@mixin truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/// Zahlen laufen in Mono mit fester Ziffernbreite, sonst zappeln die Timer.
+@mixin num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/// Das Versalien-Label in Mono, das Leitmotiv des Entwurfs.
+@mixin label($size: 9.5px, $tracking: 0.14em) {
+  font-family: var(--font-mono);
+  font-size: $size;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: $tracking;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+@mixin focus-ring {
+  &:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+}
+
+/// Die wiederkehrende Papierkarte: heller Grund, feiner Rahmen.
+@mixin card($radius: var(--radius-xl)) {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: $radius;
+}

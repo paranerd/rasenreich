@@ -10,7 +10,7 @@ import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/latin-600.css';
 
 import Page from '@/app/page';
-import './globals.css';
+import '@/styles/main.scss';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Wurzelelement #root fehlt');

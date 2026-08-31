@@ -1,0 +1,134 @@
+@use 'mixins' as *;
+
+/// Mobile Übersicht: Kartenstapel, jede Karte führt in die Detailseite.
+.overview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+
+  @include lg {
+    display: none;
+  }
+}
+
+.overview__list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 2px 16px 16px;
+  overflow-y: auto;
+}
+
+.overview__empty {
+  display: grid;
+  flex: 1;
+  padding: 32px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  text-align: center;
+  background: var(--paper);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xl);
+  place-items: center;
+}
+
+.pcard {
+  @include card(var(--radius-md));
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.pcard__open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pcard__top {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.pcard__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pcard__name {
+  @include truncate;
+
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.pcard__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.pcard__meta {
+  @include num;
+
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ink-mute);
+}
+
+.pcard__score {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.pcard__score-value {
+  @include num;
+
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.pcard__score-label {
+  @include label(8px, 0.12em);
+}
+
+.pcard__gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pcard__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+}
+
+.pcard__hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}

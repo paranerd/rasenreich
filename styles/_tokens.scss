@@ -1,0 +1,83 @@
+// Farbwelt, Schriften und Maße des Rasenreich-Entwurfs. Bewusst als
+// CSS-Variablen und nicht als SCSS-Variablen: die Zustandsfarben werden auch
+// aus berechneten Inline-Stilen heraus gesetzt, etwa je nach Zufriedenheit.
+:root {
+  --font-sans:
+    'Archivo Variable', Archivo, ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  // Papier- und Tinten-Ebenen
+  --canvas: #e9e5d9;
+  --surface: #f3f0e7;
+  --paper: #fffdf7;
+  --ink: #24291f;
+  --ink-soft: #5d6353;
+  --ink-mute: #8b9080;
+  --ink-faint: #a8ac9d;
+  --ink-faintest: #b9bcae;
+  --track: #e5e2d6;
+  --hover: #efece1;
+
+  --border: rgba(36, 41, 31, 0.12);
+  --border-soft: rgba(36, 41, 31, 0.07);
+  --border-hair: rgba(36, 41, 31, 0.1);
+  --border-chip: rgba(36, 41, 31, 0.14);
+  --ring: #5c8f3a;
+
+  --primary: #3f6b28;
+  --primary-contrast: #fffdf7;
+  --primary-line: rgba(63, 107, 40, 0.35);
+  --primary-line-strong: rgba(63, 107, 40, 0.45);
+  --primary-line-soft: rgba(63, 107, 40, 0.28);
+  --secondary: #e8efdf;
+  --highlight: #eef2e6;
+  --highlight-hover: #e2ebd4;
+  --destructive: #b0452f;
+
+  // Zustands-Töne
+  --tone-early: #a8b394;
+  --tone-dry: #b98a4a;
+  --tone-ok: #5c8f3a;
+  --tone-warn: #c0863a;
+  --tone-bad: #b0452f;
+
+  // Werte-Farben je Aufgabe
+  --kind-grass: #5c8f3a;
+  --kind-water: #3f7f96;
+  --kind-cond: #d1a63a;
+
+  // Reputation trägt eine eigene Farbe, damit sie nicht als Grundstückswert
+  // gelesen wird
+  --rep: #7b5a83;
+
+  // Flächen und Rahmen der Status- und Meldungstöne
+  --bg-bad: #f6e3dd;
+  --bg-warn: #f6ead6;
+  --bg-info: #e0edf1;
+  --bg-ok: #e8efdf;
+  --bg-neutral: #eceadf;
+  --line-bad: rgba(176, 69, 47, 0.35);
+  --line-warn: rgba(192, 134, 58, 0.45);
+
+  // Der Arbeitsstatus im Kopf
+  --busy: #4f7a2f;
+  --idle: #a8b394;
+  --logo-stripes: repeating-linear-gradient(
+    90deg,
+    #4f7a2f 0 4px,
+    #679a3f 4px 8px
+  );
+
+  // Radien nach Bauteilgröße: Schaltflächen klein, Karten mittel, Tafeln groß
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius: 9px;
+  --radius-md: 11px;
+  --radius-lg: 12px;
+  --radius-xl: 17px;
+
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}

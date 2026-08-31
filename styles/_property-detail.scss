@@ -1,0 +1,538 @@
+@use 'mixins' as *;
+
+.detail {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  overflow-y: auto;
+
+  @include lg {
+    padding: 22px 26px;
+    overflow: hidden;
+  }
+}
+
+/// Kopfkachel — die Illustration trägt sie als Hintergrund. `flex-shrink: 0`
+/// ist Pflicht: ein Flex-Kind mit `overflow: hidden` verliert sonst seine
+/// Mindesthöhe und fällt im scrollenden Container auf null zusammen.
+.detail-head {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 164px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+
+  @include lg {
+    flex: 1;
+  }
+}
+
+.detail-head__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-head__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(23, 49, 31, 0.95) 0%,
+    rgba(23, 49, 31, 0.8) 45%,
+    rgba(23, 49, 31, 0.62) 100%
+  );
+}
+
+.detail-head__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  padding: 16px;
+
+  @include sm {
+    padding: 20px;
+  }
+}
+
+.detail-head__row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+
+  @include sm {
+    gap: 20px;
+  }
+}
+
+.detail-head__titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.detail-head__eyebrow {
+  @include label(10px, 0.12em);
+
+  font-weight: 500;
+  color: rgba(255, 253, 247, 0.62);
+}
+
+.detail-head__name {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+
+  @include sm {
+    font-size: 27px;
+  }
+}
+
+.detail-head__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.detail-head__facts {
+  @include num;
+
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: rgba(255, 253, 247, 0.72);
+}
+
+.detail-head__score {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.detail-head__score-label {
+  @include label(9.5px, 0.12em);
+
+  color: rgba(255, 253, 247, 0.62);
+}
+
+.detail-head__score-value {
+  @include num;
+
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+
+  @include sm {
+    font-size: 30px;
+  }
+}
+
+/// Kurzfassungen für schmale Schirme.
+.only-wide {
+  display: none;
+
+  @include sm {
+    display: inline;
+  }
+}
+
+.only-narrow {
+  @include sm {
+    display: none;
+  }
+}
+
+.rescue {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: var(--bg-bad);
+  border: 1px solid var(--line-bad);
+  border-radius: var(--radius-xl);
+}
+
+.rescue__icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--tone-bad);
+}
+
+.rescue__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rescue__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rescue__note {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.panel {
+  @include card;
+
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+
+  @include sm {
+    padding: 20px;
+  }
+
+  @include lg {
+    flex-shrink: 1;
+    overflow-y: auto;
+  }
+}
+
+.panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel__section--values {
+  gap: 14px;
+}
+
+.panel__section--divided {
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.section-label {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.section-label__text {
+  @include label(9.5px);
+}
+
+.section-label__trailing {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/// Mobil Balken, ab Desktop Ringe.
+.gauges--bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+
+  @include lg {
+    display: none;
+  }
+}
+
+.gauges--rings {
+  display: none;
+  gap: 6px;
+  align-items: flex-start;
+
+  @include lg {
+    display: flex;
+  }
+
+  > * {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+// ------------------------------------------------------------ Aktionsknöpfe
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 10px 6px;
+  overflow: hidden;
+  color: var(--primary);
+  background: var(--paper);
+  border: 1px solid var(--primary-line);
+  border-radius: var(--radius);
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+
+  &:disabled {
+    color: var(--ink-faint);
+    border-color: var(--border);
+  }
+}
+
+.action--compact {
+  flex-direction: row;
+  gap: 0;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/// Die laufende Aktion bleibt gesperrt, hebt sich aber vom stumpfen Grau der
+/// übrigen gesperrten Schaltflächen ab und trägt ihren Fortschritt selbst.
+.action--running:disabled {
+  color: var(--primary);
+  background: var(--secondary);
+  border-color: var(--primary-line-strong);
+}
+
+/// Die eine wirklich fällige Aktion.
+.action--on {
+  color: var(--primary-contrast);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.action__label {
+  white-space: nowrap;
+
+  .action:not(.action--compact) & {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+  }
+}
+
+.action__meta {
+  @include num;
+
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ink-mute);
+  white-space: nowrap;
+
+  .action:disabled & {
+    color: var(--ink-faintest);
+  }
+
+  .action--running & {
+    color: var(--ink-soft);
+  }
+
+  .action--on & {
+    color: rgba(255, 253, 247, 0.82);
+  }
+}
+
+.action__track {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--track);
+}
+
+.action__progress {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 1s linear;
+}
+
+// ------------------------------------------------------------------ Upgrades
+
+/// Mobil kompakte Zeilen, ab sm drei Karten.
+.shelf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  @include sm {
+    display: none;
+  }
+}
+
+.shelf-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.shelf-row__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.shelf-row__name {
+  @include truncate;
+
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.shelf-row__desc {
+  @include truncate;
+
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--ink-mute);
+}
+
+.shelf-row__buy {
+  @include num;
+
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 13px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--primary);
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--primary-line-soft);
+  border-radius: var(--radius);
+
+  &:disabled {
+    color: var(--ink-faint);
+    border-color: var(--border);
+  }
+}
+
+.shelf-cards {
+  display: none;
+
+  @include sm {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+.shelf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.shelf-card__kind {
+  @include label(9px, 0.12em);
+
+  font-weight: 500;
+}
+
+.shelf-card__name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.shelf-card__desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+
+.shelf-card__lock {
+  @include num;
+
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-mute);
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.shelf-card__buy {
+  @include num;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--primary);
+  background: var(--paper);
+  border: 1px solid var(--primary-line);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s;
+
+  &:disabled {
+    color: var(--ink-faint);
+    border-color: var(--border);
+  }
+}
+
+.shelf-card__done {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: var(--primary);
+  }
+}

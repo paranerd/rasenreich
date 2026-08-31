@@ -1,0 +1,446 @@
+@use 'mixins' as *;
+
+/// Rahmen der ganzseitigen Ansichten (Angebote, Technik).
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 16px;
+
+  @include lg {
+    padding: 24px;
+  }
+}
+
+.view__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.view__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.view__eyebrow {
+  @include label(9.5px);
+}
+
+.view__title {
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.view__note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.timer-badge {
+  @include num;
+
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.empty {
+  display: grid;
+  min-height: 256px;
+  padding: 40px;
+  text-align: center;
+  background: var(--paper);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xl);
+  place-items: center;
+}
+
+.empty__inner {
+  max-width: 28rem;
+}
+
+.empty__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  color: var(--primary);
+  background: var(--secondary);
+  border-radius: var(--radius-xl);
+  place-items: center;
+}
+
+.empty__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.empty__text {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+// ------------------------------------------------------------------ Angebote
+
+.offers {
+  display: grid;
+  gap: 16px;
+
+  @include md {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include xl {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.offer {
+  @include card;
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.offer__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.offer__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.offer__name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.offer__subtitle {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.offer__type {
+  @include label(9px, 0.08em);
+
+  flex-shrink: 0;
+  padding: 4px 8px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  background: var(--bg-neutral);
+  border-radius: var(--radius-xs);
+}
+
+.offer__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stat {
+  padding: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.stat__label {
+  @include label(9px);
+}
+
+.stat__value {
+  @include num;
+
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.offer__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.offer__fact {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+
+  dd {
+    font-weight: 600;
+    color: var(--ink);
+  }
+}
+
+.offer__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+
+  .btn {
+    flex: 1;
+  }
+}
+
+// ------------------------------------------------------------------- Technik
+
+.upgrades {
+  display: grid;
+  gap: 16px;
+
+  @include lg {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.ucard {
+  @include card;
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.ucard__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ucard__kind {
+  @include label(9.5px);
+}
+
+.ucard__name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.ucard__note {
+  @include label(10px, normal);
+
+  font-weight: 500;
+  text-transform: none;
+}
+
+.ustep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+
+  .btn {
+    width: 100%;
+    margin-top: 4px;
+  }
+}
+
+.ustep--install {
+  background: var(--highlight);
+  border-color: var(--primary-line-soft);
+}
+
+.ustep--research {
+  background: var(--surface);
+}
+
+.ustep__head {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: var(--ink-mute);
+  }
+}
+
+.ustep__label {
+  @include label(9px);
+}
+
+.ustep__name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.ustep__desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+
+.ustep__req {
+  @include label(10px, normal);
+
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-transform: none;
+}
+
+.udone {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 112px;
+  padding: 16px;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius);
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: var(--primary);
+  }
+}
+
+.udone__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.udone__text {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.care {
+  @include card;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.care__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.care__title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: var(--primary);
+  }
+}
+
+.care__note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.care__grid {
+  display: grid;
+  gap: 12px;
+
+  @include md {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .btn {
+    width: 100%;
+    margin-top: auto;
+  }
+}
+
+.care-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.care-item__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.care-item__name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.care-item__badge {
+  @include label(9px, 0.08em);
+
+  flex-shrink: 0;
+  padding: 4px 8px;
+  color: var(--tone-ok);
+  background: var(--bg-ok);
+  border-radius: var(--radius-xs);
+}
+
+.care-item__desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}

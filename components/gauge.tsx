@@ -4,12 +4,6 @@ import { conditionHint, grassHint, moistureHint, TASK_LABELS, TaskKind } from '@
 
 export type GaugeVariant = 'bar' | 'ring' | 'mini';
 
-const KIND_COLOR: Record<TaskKind, string> = {
-  mow: 'var(--kind-grass)',
-  water: 'var(--kind-water)',
-  maintain: 'var(--kind-cond)',
-};
-
 /**
  * Zustands-Ton auf der vereinheitlichten 0-100-%-Skala: je höher, desto besser.
  * Die Schwellen spiegeln die Hinweistexte aus lib/game.ts.
@@ -50,29 +44,29 @@ interface GaugeProps {
 }
 
 export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeProps) {
-  // Der Balken endet bei 100 %, der abgelesene Wert nicht: Regen kann die
-  // Feuchtigkeit darueber treiben, und das soll sichtbar bleiben.
+  // Die Füllung endet bei 100 %, der abgelesene Wert nicht: Regen kann die
+  // Feuchtigkeit darüber treiben, und das soll sichtbar bleiben.
   const fill = Math.max(0, Math.min(100, value));
   const rounded = Math.round(Math.max(0, value));
   const tone = toneColor(kind, value);
   const text = label ?? TASK_LABELS[kind];
   const hint = metricHint(kind, value);
+  const meter = {
+    role: 'meter' as const,
+    'aria-valuemin': 0,
+    'aria-valuemax': Math.max(100, rounded),
+    'aria-valuenow': rounded,
+    'aria-label': `${text}: ${rounded} %`,
+  };
 
   if (variant === 'mini') {
     return (
       <div
-        className={`relative h-[3px] overflow-hidden rounded-sm bg-track ${className ?? ''}`}
-        role="meter"
-        aria-valuemin={0}
-        aria-valuemax={Math.max(100, rounded)}
-        aria-valuenow={rounded}
-        aria-label={`${text}: ${rounded} %`}
+        className={`gauge gauge--mini kind--${kind} ${className ?? ''}`}
         title={`${text}: ${rounded} % — ${hint}`}
+        {...meter}
       >
-        <div
-          className="absolute inset-y-0 left-0"
-          style={{ width: `${fill}%`, background: KIND_COLOR[kind] }}
-        />
+        <div className="gauge__fill" style={{ width: `${fill}%` }} />
       </div>
     );
   }
@@ -82,20 +76,13 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
     const circumference = 2 * Math.PI * 26;
     const arc = circumference * 0.75;
     return (
-      <div
-        className={`flex flex-col items-center gap-1.5 ${className ?? ''}`}
-        role="meter"
-        aria-valuemin={0}
-        aria-valuemax={Math.max(100, rounded)}
-        aria-valuenow={rounded}
-        aria-label={`${text}: ${rounded} %`}
-      >
-        <div className="relative size-16">
+      <div className={`gauge gauge--ring kind--${kind} ${className ?? ''}`} {...meter}>
+        <div className="gauge__dial">
           <svg
+            className="gauge__dial-svg"
             width="64"
             height="64"
             viewBox="0 0 64 64"
-            className="rotate-[135deg]"
             aria-hidden="true"
           >
             <circle
@@ -112,21 +99,17 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
               cy="32"
               r="26"
               fill="none"
-              stroke={KIND_COLOR[kind]}
+              stroke="var(--kind)"
               strokeWidth="7"
               strokeLinecap="butt"
               strokeDasharray={`${(arc * fill) / 100} ${circumference}`}
             />
           </svg>
-          <div className="absolute inset-0 grid place-items-center">
-            <span className="font-mono text-[17px] font-semibold leading-none text-ink tabular-nums">
-              {rounded}
-            </span>
-          </div>
+          <span className="gauge__dial-value">{rounded}</span>
         </div>
-        <div className="flex flex-col items-center gap-0.5 text-center">
-          <span className="rr-label text-[9.5px] leading-none">{text}</span>
-          <span className="text-[9px] leading-tight" style={{ color: tone }}>
+        <div className="gauge__foot">
+          <span className="gauge__label">{text}</span>
+          <span className="gauge__hint" style={{ color: tone }}>
             {hint}
           </span>
         </div>
@@ -135,29 +118,15 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
   }
 
   return (
-    <div
-      className={`flex w-full flex-col gap-1.5 ${className ?? ''}`}
-      role="meter"
-      aria-valuemin={0}
-      aria-valuemax={Math.max(100, rounded)}
-      aria-valuenow={rounded}
-      aria-label={`${text}: ${rounded} %`}
-      title={hint}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="rr-label text-[9.5px] leading-none tracking-[0.1em]">{text}</span>
-        <span
-          className="font-mono text-xs font-semibold leading-none tabular-nums"
-          style={{ color: tone }}
-        >
+    <div className={`gauge kind--${kind} ${className ?? ''}`} title={hint} {...meter}>
+      <div className="gauge__head">
+        <span className="gauge__label">{text}</span>
+        <span className="gauge__value" style={{ color: tone }}>
           {rounded} %
         </span>
       </div>
-      <div className="relative h-[7px] overflow-hidden rounded bg-track">
-        <div
-          className="absolute inset-y-0 left-0 rounded"
-          style={{ width: `${fill}%`, background: KIND_COLOR[kind] }}
-        />
+      <div className="gauge__track">
+        <div className="gauge__fill" style={{ width: `${fill}%` }} />
       </div>
     </div>
   );

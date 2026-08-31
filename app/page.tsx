@@ -22,8 +22,8 @@ import {
   X,
 } from 'lucide-react';
 
+import { Button } from '@/components/button';
 import { Gauge } from '@/components/gauge';
-import { Button } from '@/components/ui/button';
 import { Toast, useGame } from '@/hooks/use-game';
 import {
   ACTION_LABELS,
@@ -50,16 +50,6 @@ import {
 } from '@/lib/game';
 
 const KINDS: TaskKind[] = ['mow', 'water', 'maintain'];
-
-const STATUS_COLOR = {
-  danger: { color: 'var(--tone-bad)', bg: '#f6e3dd' },
-  warning: { color: 'var(--tone-warn)', bg: '#f6ead6' },
-  info: { color: 'var(--kind-water)', bg: '#e0edf1' },
-  good: { color: 'var(--tone-ok)', bg: '#e8efdf' },
-  neutral: { color: 'var(--ink-mute)', bg: '#eceadf' },
-} as const;
-
-const LOGO_STRIPES = 'repeating-linear-gradient(90deg,#4f7a2f 0 4px,#679a3f 4px 8px)';
 
 /** Reine Zahl ohne Währung — der Kopf setzt das Eurozeichen eigenständig daneben. */
 const amountFormatter = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
@@ -120,25 +110,13 @@ const FILTERS: Array<{ id: FilterId; label: string; match: (property: GardenProp
 
 function StatusChip({ property }: { property: GardenProperty }) {
   const status = propertyStatus(property);
-  const tone = STATUS_COLOR[status.tone];
-  return (
-    <span
-      className="shrink-0 whitespace-nowrap rounded-[5px] px-[7px] py-1 font-mono text-[9px] font-semibold uppercase leading-none tracking-[0.08em]"
-      style={{ background: tone.bg, color: tone.color }}
-    >
-      {status.label}
-    </span>
-  );
+  return <span className={`chip tone--${status.tone}`}>{status.label}</span>;
 }
 
 function StatusDot({ property }: { property: GardenProperty }) {
   const status = propertyStatus(property);
   return (
-    <span
-      className={`size-2 shrink-0 rounded-full ${property.task ? 'rr-pulse' : ''}`}
-      style={{ background: STATUS_COLOR[status.tone].color }}
-      aria-hidden="true"
-    />
+    <span className={`dot tone--${status.tone} ${property.task ? 'pulse' : ''}`} aria-hidden="true" />
   );
 }
 
@@ -152,8 +130,8 @@ function WeatherBadge({ weather, className }: { weather: 'mild' | 'heat' | 'rain
   const color =
     weather === 'heat' ? 'var(--tone-warn)' : weather === 'rain' ? 'var(--kind-water)' : 'var(--ink-mute)';
   return (
-    <span className={className} title={label} aria-label={label}>
-      <Icon className="size-5" style={{ color }} aria-hidden="true" />
+    <span className={`weather ${className ?? ''}`} title={label} aria-label={label}>
+      <Icon style={{ color }} aria-hidden="true" />
     </span>
   );
 }
@@ -166,7 +144,7 @@ function ReputationRing({ reputation }: { reputation: number }) {
 
   return (
     <span
-      className="relative grid size-[30px] shrink-0 place-items-center"
+      className="rep"
       title={`Reputation ${Math.floor(reputation)} — nächste Freischaltung bei ${next}`}
       role="meter"
       aria-valuemin={0}
@@ -174,7 +152,7 @@ function ReputationRing({ reputation }: { reputation: number }) {
       aria-valuenow={Math.floor(reputation)}
       aria-label={`Reputation ${Math.floor(reputation)} von ${next}`}
     >
-      <svg width="30" height="30" viewBox="0 0 30 30" className="absolute inset-0 -rotate-90" aria-hidden="true">
+      <svg className="rep__svg" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
         <circle cx="15" cy="15" r="12" fill="none" stroke="var(--track)" strokeWidth="3.5" />
         <circle
           cx="15"
@@ -187,13 +165,34 @@ function ReputationRing({ reputation }: { reputation: number }) {
           strokeDasharray={`${(circumference * percent) / 100} ${circumference}`}
         />
       </svg>
-      <span
-        className="relative font-mono text-[11px] font-semibold leading-none tabular-nums"
-        style={{ color: 'var(--rep)' }}
-      >
-        {Math.floor(reputation)}
-      </span>
+      <span className="rep__value">{Math.floor(reputation)}</span>
     </span>
+  );
+}
+
+/** Arbeitsstatus unter dem Vermögen — springt in das arbeitende Grundstück. */
+function ActivityButton({
+  activeProperty,
+  onOpen,
+}: {
+  activeProperty?: GardenProperty;
+  onOpen: () => void;
+}) {
+  const task = activeProperty?.task;
+  const busy = Boolean(task);
+
+  return (
+    <button
+      type="button"
+      className={`activity ${busy ? 'activity--busy' : ''}`}
+      disabled={!busy}
+      onClick={onOpen}
+      title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
+    >
+      <span className={`activity__dot ${busy ? 'pulse' : ''}`} aria-hidden="true" />
+      <span className="activity__state">{busy ? 'Beschäftigt' : 'Verfügbar'}</span>
+      {task && <span className="activity__time">{formatDuration(task.endsAt - Date.now())}</span>}
+    </button>
   );
 }
 
@@ -212,68 +211,28 @@ function AppHeader({
   onActiveProperty: () => void;
   onHome: () => void;
 }) {
-  const task = activeProperty?.task;
-  const busy = Boolean(task);
-
   return (
-    <header className="hidden shrink-0 border-b border-border bg-paper lg:block">
+    <header className="header">
       {/* Drei Spalten, damit das Vermögen unabhängig von den Seiten mittig steht */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-[26px] py-2.5">
-        <button
-          className="flex w-fit items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onClick={onHome}
-        >
-          <span className="size-[26px] shrink-0 rounded-[5px]" style={{ background: LOGO_STRIPES }} />
-          <span className="text-[13px] font-bold leading-none tracking-[0.14em] text-ink">GARDEN GRINDER</span>
+      <div className="header__inner">
+        <button type="button" className="header__brand" onClick={onHome}>
+          <span className="header__logo" />
+          <span className="header__wordmark">GARDEN GRINDER</span>
         </button>
 
-        <div className="flex flex-col items-center gap-1.5">
-          <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Vermögen</span>
-          <span className="font-mono text-[26px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
-            {formatMoney(money)}
-          </span>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-[#efece1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default disabled:hover:bg-transparent"
-            disabled={!busy}
-            onClick={onActiveProperty}
-            title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
-          >
-            <span
-              className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
-              style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
-              aria-hidden="true"
-            />
-            <span className="whitespace-nowrap text-[11.5px] font-semibold leading-none text-ink-soft">
-              {busy ? 'Beschäftigt' : 'Verfügbar'}
-            </span>
-            {task && (
-              <span className="whitespace-nowrap font-mono text-[11.5px] font-semibold leading-none text-ink-soft tabular-nums">
-                {formatDuration(task.endsAt - Date.now())}
-              </span>
-            )}
-          </button>
+        <div className="header__money">
+          <span className="header__money-label">Vermögen</span>
+          <span className="header__money-value">{formatMoney(money)}</span>
+          <ActivityButton activeProperty={activeProperty} onOpen={onActiveProperty} />
         </div>
 
-        <div className="flex items-center justify-end gap-4">
+        <div className="header__aside">
           <ReputationRing reputation={reputation} />
-          <WeatherBadge weather={weather} className="grid size-7 shrink-0 place-items-center" />
+          <WeatherBadge weather={weather} />
         </div>
       </div>
     </header>
   );
-}
-
-const SIDE_NAV_ITEM =
-  'group flex flex-col items-center gap-1.5 rounded-[9px] px-1 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50';
-
-/** Hintergrund, Icon- und Textfarbe eines Leisteneintrags, jeweils mit Hover-Zustand. */
-function sideNavTone(active: boolean) {
-  return {
-    surface: active ? 'bg-[#eef2e6] hover:bg-[#e2ebd4]' : 'hover:bg-[#efece1]',
-    icon: active ? 'text-[#3f6b28]' : 'text-[#a8b394] group-hover:text-ink-soft',
-    label: active ? 'text-ink' : 'text-ink-mute group-hover:text-ink',
-  };
 }
 
 /** Schmale Icon-Leiste links: Hauptnavigation und Einstellungen auf Desktop. */
@@ -295,50 +254,37 @@ function SideNav({
   ];
 
   return (
-    <nav
-      className="hidden w-20 shrink-0 flex-col gap-1 border-r border-border bg-paper p-2 lg:flex"
-      aria-label="Hauptnavigation"
-    >
+    <nav className="sidenav" aria-label="Hauptnavigation">
       {nav.map(({ id, label, icon: Icon }) => {
         const active = !settingsOpen && view === id;
-        const tone = sideNavTone(active);
         return (
           <button
             key={id}
             type="button"
-            className={`${SIDE_NAV_ITEM} ${tone.surface}`}
+            className={`sidenav__item ${active ? 'sidenav__item--active' : ''}`}
             onClick={() => setView(id)}
             aria-current={active ? 'page' : undefined}
           >
-            <Icon className={`size-[18px] transition-colors ${tone.icon}`} aria-hidden="true" />
-            <span className={`text-[9.5px] font-semibold leading-none transition-colors ${tone.label}`}>
-              {label}
-            </span>
+            <Icon aria-hidden="true" />
+            <span className="sidenav__label">{label}</span>
           </button>
         );
       })}
 
       <button
         type="button"
-        className={`${SIDE_NAV_ITEM} ${sideNavTone(settingsOpen).surface} mt-auto border-t border-border/70 pt-3.5`}
+        className={`sidenav__item sidenav__settings ${settingsOpen ? 'sidenav__item--active' : ''}`}
         onClick={onSettings}
         aria-current={settingsOpen ? 'page' : undefined}
       >
-        <Settings2
-          className={`size-[18px] transition-colors ${sideNavTone(settingsOpen).icon}`}
-          aria-hidden="true"
-        />
-        <span
-          className={`text-[9.5px] font-semibold leading-none transition-colors ${sideNavTone(settingsOpen).label}`}
-        >
-          Einstellungen
-        </span>
+        <Settings2 aria-hidden="true" />
+        <span className="sidenav__label">Einstellungen</span>
       </button>
     </nav>
   );
 }
 
-/** Mobiler Kopf aus Entwurf 2a: Vermögen als größte Zahl, darunter Aktivität und Ruf. */
+/** Mobiler Kopf: Vermögen als größte Zahl, darunter Aktivität, daneben der Ruf. */
 function MobileHeader({
   money,
   reputation,
@@ -354,60 +300,31 @@ function MobileHeader({
   onActiveProperty: () => void;
   onBack?: () => void;
 }) {
-  const task = activeProperty?.task;
-  const busy = Boolean(task);
-
   return (
-    <header className="relative flex min-h-[96px] shrink-0 flex-col items-center justify-center gap-[7px] border-b border-border bg-paper px-4 py-3 lg:hidden">
+    <header className="mobile-header">
       {onBack ? (
         <button
           type="button"
-          className="absolute left-1.5 top-1.5 grid size-11 place-items-center rounded-[9px] text-primary"
+          className="mobile-header__back"
           onClick={onBack}
           aria-label="Zurück zur Übersicht"
         >
-          <ArrowLeft className="size-5" aria-hidden="true" />
+          <ArrowLeft aria-hidden="true" />
         </button>
       ) : (
-        <span
-          className="absolute left-4 top-3.5 size-[26px] rounded-md"
-          style={{ background: LOGO_STRIPES }}
-          aria-hidden="true"
-        />
+        <span className="mobile-header__logo" aria-hidden="true" />
       )}
-      <WeatherBadge weather={weather} className="absolute right-4 top-3 grid size-7 place-items-center" />
+      <WeatherBadge weather={weather} className="mobile-header__weather" />
 
-      <span className="rr-label text-[8.5px] leading-none tracking-[0.16em]">Vermögen</span>
-      <span className="flex items-baseline gap-1">
-        <span className="font-mono text-[34px] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">
-          {amountFormatter.format(money)}
-        </span>
-        <span className="font-mono text-[17px] font-semibold leading-none text-ink-soft">€</span>
+      <span className="mobile-header__label">Vermögen</span>
+      <span className="mobile-header__money">
+        <span className="mobile-header__amount">{amountFormatter.format(money)}</span>
+        <span className="mobile-header__currency">€</span>
       </span>
 
-      <button
-        type="button"
-        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors disabled:cursor-default"
-        disabled={!busy}
-        onClick={onActiveProperty}
-        title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
-      >
-        <span
-          className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
-          style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
-          aria-hidden="true"
-        />
-        <span className="whitespace-nowrap text-[11.5px] font-semibold leading-none text-ink-soft">
-          {busy ? 'Beschäftigt' : 'Verfügbar'}
-        </span>
-        {task && (
-          <span className="whitespace-nowrap font-mono text-[11.5px] font-semibold leading-none text-ink-soft tabular-nums">
-            {formatDuration(task.endsAt - Date.now())}
-          </span>
-        )}
-      </button>
+      <ActivityButton activeProperty={activeProperty} onOpen={onActiveProperty} />
 
-      <span className="absolute bottom-3 right-4">
+      <span className="mobile-header__rep">
         <ReputationRing reputation={reputation} />
       </span>
     </header>
@@ -433,29 +350,19 @@ function MobileTabBar({
   ];
 
   return (
-    <nav
-      className="flex shrink-0 border-t border-border bg-paper px-2 pt-2 lg:hidden"
-      style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-      aria-label="Hauptnavigation"
-    >
+    <nav className="tabbar" aria-label="Hauptnavigation">
       {tabs.map(({ id, label, icon: Icon }) => {
         const active = id === 'settings' ? settingsOpen : !settingsOpen && view === id;
         return (
           <button
             key={id}
             type="button"
-            className="flex flex-1 flex-col items-center gap-1.5 rounded-[9px] px-0 pb-[7px] pt-[9px]"
-            style={{ background: active ? '#eef2e6' : 'transparent' }}
+            className={`tabbar__item ${active ? 'tabbar__item--active' : ''}`}
             onClick={() => (id === 'settings' ? onSettings() : setView(id))}
             aria-current={active ? 'page' : undefined}
           >
-            <Icon className="size-[18px]" style={{ color: active ? '#3f6b28' : '#a8b394' }} aria-hidden="true" />
-            <span
-              className="text-[10px] font-semibold leading-none"
-              style={{ color: active ? 'var(--ink)' : 'var(--ink-mute)' }}
-            >
-              {label}
-            </span>
+            <Icon aria-hidden="true" />
+            <span className="tabbar__label">{label}</span>
           </button>
         );
       })}
@@ -463,17 +370,13 @@ function MobileTabBar({
   );
 }
 
-const TOAST_TONE = {
-  good: { color: 'var(--tone-ok)', border: 'rgba(92,143,58,.4)', Icon: Check },
-  warning: { color: 'var(--tone-warn)', border: 'rgba(192,134,58,.45)', Icon: BellRing },
-  info: { color: 'var(--ink-soft)', border: 'rgba(36,41,31,.16)', Icon: Sparkles },
-} as const;
+const TOAST_ICON = { good: Check, warning: BellRing, info: Sparkles } as const;
 
-type ToastTone = keyof typeof TOAST_TONE;
+type ToastTone = keyof typeof TOAST_ICON;
 
 /**
- * Eine Meldung im Stapel. Ohne Standzeit bleibt sie stehen und will bestaetigt
- * werden; mit Standzeit laeuft der Balken am unteren Rand sichtbar ab.
+ * Eine Meldung im Stapel. Ohne Standzeit bleibt sie stehen und will bestätigt
+ * werden; mit Standzeit läuft der Balken am unteren Rand sichtbar ab.
  */
 function ToastCard({
   text,
@@ -488,9 +391,9 @@ function ToastCard({
   actionLabel?: string;
   onDismiss: () => void;
 }) {
-  const { color, border, Icon } = TOAST_TONE[tone];
-  // Der Spieltakt rendert jede Sekunde neu. Ohne Ref auf die Rueckmeldung
-  // wuerde der Effekt jedes Mal neu laufen und die Standzeit nie ablaufen.
+  const Icon = TOAST_ICON[tone];
+  // Der Spieltakt rendert jede Sekunde neu. Ohne Ref auf die Rückmeldung
+  // würde der Effekt jedes Mal neu laufen und die Standzeit nie ablaufen.
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
@@ -501,34 +404,28 @@ function ToastCard({
   }, [duration]);
 
   return (
-    <div
-      className="rr-toast pointer-events-auto flex w-full max-w-[440px] flex-col overflow-hidden rounded-[11px] border bg-paper shadow-lg"
-      style={{ borderColor: border }}
-    >
-      <div className="flex items-center gap-2.5 py-2.5 pl-3 pr-2">
-        <Icon className="size-4 shrink-0" style={{ color }} aria-hidden="true" />
-        <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">{text}</p>
+    <div className={`toast toast--${tone}`}>
+      <div className="toast__body">
+        <Icon className="toast__icon" aria-hidden="true" />
+        <p className="toast__text">{text}</p>
         {actionLabel ? (
-          <Button variant="outline" size="xs" className="shrink-0 bg-surface" onClick={onDismiss}>
+          <Button variant="outline" size="xs" onClick={onDismiss}>
             {actionLabel}
           </Button>
         ) : (
           <button
             type="button"
-            className="grid size-7 shrink-0 place-items-center rounded-md text-ink-mute transition-colors hover:bg-[#efece1] hover:text-ink"
+            className="toast__close"
             aria-label="Meldung schließen"
             onClick={onDismiss}
           >
-            <X className="size-3.5" aria-hidden="true" />
+            <X aria-hidden="true" />
           </button>
         )}
       </div>
       {duration ? (
-        <span className="h-[3px] w-full shrink-0 bg-track" aria-hidden="true">
-          <span
-            className="rr-toast-timer block h-full w-full"
-            style={{ background: color, animationDuration: `${duration}ms` }}
-          />
+        <span className="toast__track" aria-hidden="true">
+          <span className="toast__timer" style={{ animationDuration: `${duration}ms` }} />
         </span>
       ) : null}
     </div>
@@ -548,10 +445,7 @@ function ToastStack({
   onDismiss: (id: string) => void;
 }) {
   return (
-    <div
-      className="pointer-events-none absolute inset-x-0 top-0 z-40 flex flex-col items-center gap-2 px-4 pt-3"
-      aria-live="polite"
-    >
+    <div className="toasts" aria-live="polite">
       {event && (
         <ToastCard
           key={event.id}
@@ -560,7 +454,7 @@ function ToastStack({
           onDismiss={onResolveEvent}
           text={
             <>
-              <strong className="font-semibold">{event.title}:</strong> {event.description}
+              <strong>{event.title}:</strong> {event.description}
             </>
           }
         />
@@ -596,7 +490,7 @@ function FilterChips({
   }));
 
   return (
-    <div className={`flex shrink-0 gap-[7px] overflow-x-auto px-4 py-2.5 ${className}`}>
+    <div className={`filters ${className}`}>
       {chips.map((chip) => {
         const on = chip.id === active;
         const empty = chip.count === 0 && chip.id !== 'all';
@@ -604,12 +498,7 @@ function FilterChips({
           <button
             key={chip.id}
             type="button"
-            className="shrink-0 whitespace-nowrap rounded-lg border px-[13px] py-[9px] text-xs font-semibold leading-none disabled:cursor-default"
-            style={{
-              background: on ? 'var(--ink)' : 'var(--paper)',
-              color: on ? 'var(--surface)' : empty ? '#b0b4a6' : 'var(--ink-soft)',
-              borderColor: on ? 'var(--ink)' : empty ? 'rgba(36,41,31,.07)' : 'rgba(36,41,31,.14)',
-            }}
+            className={`filter ${on ? 'filter--on' : ''} ${empty ? 'filter--empty' : ''}`}
             disabled={empty && !on}
             onClick={() => onChange(chip.id)}
             aria-pressed={on}
@@ -623,7 +512,7 @@ function FilterChips({
   );
 }
 
-/** Dichte Liste links auf Desktop (Entwurf 3b). */
+/** Dichte Liste links auf Desktop. */
 function PropertyList({
   properties,
   selectedId,
@@ -642,62 +531,48 @@ function PropertyList({
   const visible = properties.filter(match);
 
   return (
-    <aside className="hidden w-[392px] shrink-0 flex-col border-r border-border bg-paper lg:flex">
-      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-        <span className="rr-label text-[11px] leading-none tracking-[0.12em] text-ink-soft">
+    <aside className="plist">
+      <div className="plist__head">
+        <span className="plist__count">
           {filter === 'all'
             ? `${properties.length} ${properties.length === 1 ? 'Grundstück' : 'Grundstücke'}`
             : `${visible.length} von ${properties.length}`}
         </span>
-        {blocked > 0 && (
-          <span
-            className="font-mono text-[10px] font-medium uppercase leading-none"
-            style={{ color: 'var(--tone-bad)' }}
-          >
-            {blocked} blockiert
-          </span>
-        )}
+        {blocked > 0 && <span className="plist__blocked">{blocked} blockiert</span>}
       </div>
       <FilterChips
         properties={properties}
         active={filter}
         onChange={onFilter}
-        className="border-b border-border/60"
+        className="filters--divided"
       />
-      <div className="flex-1 overflow-y-auto">
+      <div className="plist__scroll">
         {visible.length === 0 && (
-          <p className="px-4 py-8 text-center text-[12.5px] text-ink-soft">
-            Kein Grundstück passt zu diesem Filter.
-          </p>
+          <p className="plist__empty">Kein Grundstück passt zu diesem Filter.</p>
         )}
         {visible.map((property) => {
           const selected = property.id === selectedId;
           return (
             <button
               key={property.id}
-              className={`flex w-full items-center gap-3 border-b border-border/40 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 ${
-                selected ? 'bg-[#e8efdf] hover:bg-[#e2ebd4]' : 'hover:bg-[#f6f3ea]'
-              }`}
-              style={{ boxShadow: selected ? 'inset 3px 0 0 var(--primary)' : 'none' }}
+              type="button"
+              className={`plist__row ${selected ? 'plist__row--selected' : ''}`}
               onClick={() => onSelect(property.id)}
               aria-current={selected ? 'true' : undefined}
             >
               <StatusDot property={property} />
-              <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                <span className="truncate text-[12.5px] font-semibold leading-tight text-ink">{property.name}</span>
-                <span className="truncate font-mono text-[9.5px] font-medium leading-none text-ink-mute">
+              <span className="plist__body">
+                <span className="plist__name">{property.name}</span>
+                <span className="plist__meta">
                   {property.size.toLocaleString('de-DE')} m² · {property.type}
                 </span>
               </span>
-              <span className="flex w-[60px] shrink-0 flex-col gap-[3px]" aria-hidden="true">
+              <span className="plist__gauges" aria-hidden="true">
                 {KINDS.map((kind) => (
                   <Gauge key={kind} kind={kind} value={propertyMetricPercent(property, kind)} variant="mini" />
                 ))}
               </span>
-              <span
-                className="shrink-0 whitespace-nowrap font-mono text-[13px] font-semibold leading-none tabular-nums"
-                style={{ color: satisfactionColor(property.satisfaction) }}
-              >
+              <span className="plist__score" style={{ color: satisfactionColor(property.satisfaction) }}>
                 {Math.round(property.satisfaction)} %
               </span>
             </button>
@@ -708,7 +583,7 @@ function PropertyList({
   );
 }
 
-/** Waagerechte Leiste über der mobilen Detailansicht (Entwurf 3a). */
+/** Waagerechte Leiste über der mobilen Detailansicht. */
 function PropertyRail({
   properties,
   selectedId,
@@ -719,35 +594,28 @@ function PropertyRail({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-border bg-paper px-4 py-2.5 lg:hidden">
+    <div className="rail">
       {properties.map((property) => {
         const selected = property.id === selectedId;
         return (
           <button
             key={property.id}
-            className="flex shrink-0 flex-col gap-1.5 rounded-lg border px-3 py-2 text-left"
-            style={{
-              background: selected ? '#e8efdf' : 'var(--surface)',
-              borderColor: selected ? 'rgba(79,122,47,.45)' : 'rgba(36,41,31,.1)',
-            }}
+            type="button"
+            className={`rail__item ${selected ? 'rail__item--selected' : ''}`}
             onClick={() => onSelect(property.id)}
             aria-current={selected ? 'true' : undefined}
           >
-            <span className="flex items-center gap-1.5">
+            <span className="rail__head">
               <StatusDot property={property} />
-              <span className="whitespace-nowrap text-[11px] font-semibold leading-none text-ink">
-                {property.name}
-              </span>
+              <span className="rail__name">{property.name}</span>
             </span>
-            <span className="flex gap-[3px]" aria-hidden="true">
+            <span className="rail__dots" aria-hidden="true">
               {KINDS.map((kind) => (
                 <span
                   key={kind}
-                  className="size-[9px] rounded-[2px]"
-                  style={{
-                    background: `var(--kind-${kind === 'mow' ? 'grass' : kind === 'water' ? 'water' : 'cond'})`,
-                    opacity: propertyMetricPercent(property, kind) < 25 ? 0.45 : 1,
-                  }}
+                  className={`rail__dot kind--${kind} ${
+                    propertyMetricPercent(property, kind) < 25 ? 'rail__dot--low' : ''
+                  }`}
                 />
               ))}
             </span>
@@ -761,61 +629,43 @@ function PropertyRail({
 /** Kopfkachel der Detailseite — die Illustration trägt sie als Hintergrund. */
 function DetailHeader({ property }: { property: GardenProperty }) {
   return (
-    <div className="relative min-h-[164px] overflow-hidden rounded-xl border border-border lg:flex-1">
+    <div className="detail-head">
       <img
+        className="detail-head__image"
         src={`${import.meta.env.BASE_URL}assets/garden-dashboard.png`}
         alt=""
         aria-hidden="true"
-        className="absolute inset-0 size-full object-cover"
       />
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(to top, rgba(23,49,31,.95) 0%, rgba(23,49,31,.80) 45%, rgba(23,49,31,.62) 100%)',
-        }}
-        aria-hidden="true"
-      />
-      <div className="relative flex h-full flex-col justify-end p-4 sm:p-5">
-        <div className="flex items-start gap-4 sm:gap-5">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <span
-            className="font-mono text-[10px] font-medium uppercase leading-none tracking-[0.12em]"
-            style={{ color: 'rgba(255,253,247,.62)' }}
-          >
-            {property.subtitle}
-          </span>
-          <h2 className="text-[22px] font-bold leading-tight text-white sm:text-[27px]">{property.name}</h2>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <StatusChip property={property} />
-            <span
-              className="font-mono text-[10.5px] font-medium leading-none"
-              style={{ color: 'rgba(255,253,247,.72)' }}
-            >
-              {property.size.toLocaleString('de-DE')} m² · {property.type}
-              <span className="hidden sm:inline">
-                {' '}
-                · {property.completedJobs} {property.completedJobs === 1 ? 'Schnitt' : 'Schnitte'} ·{' '}
-                {formatMoney(property.lifetimeRevenue)} Umsatz
+      <div className="detail-head__scrim" aria-hidden="true" />
+      <div className="detail-head__inner">
+        <div className="detail-head__row">
+          <div className="detail-head__titles">
+            <span className="detail-head__eyebrow">{property.subtitle}</span>
+            <h2 className="detail-head__name">{property.name}</h2>
+            <div className="detail-head__tags">
+              <StatusChip property={property} />
+              <span className="detail-head__facts">
+                {property.size.toLocaleString('de-DE')} m² · {property.type}
+                <span className="only-wide">
+                  {' '}
+                  · {property.completedJobs} {property.completedJobs === 1 ? 'Schnitt' : 'Schnitte'} ·{' '}
+                  {formatMoney(property.lifetimeRevenue)} Umsatz
+                </span>
               </span>
+            </div>
+          </div>
+          <div className="detail-head__score">
+            <span className="detail-head__score-label">
+              <span className="only-narrow">Zufrieden</span>
+              <span className="only-wide">Zufriedenheit</span>
+            </span>
+            <span
+              className="detail-head__score-value"
+              style={{ color: satisfactionColorOnImage(property.satisfaction) }}
+            >
+              {Math.round(property.satisfaction)} %
             </span>
           </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span
-            className="font-mono text-[9.5px] font-semibold uppercase leading-none tracking-[0.12em]"
-            style={{ color: 'rgba(255,253,247,.62)' }}
-          >
-            <span className="sm:hidden">Zufrieden</span>
-            <span className="hidden sm:inline">Zufriedenheit</span>
-          </span>
-          <span
-            className="font-mono text-[24px] font-semibold leading-none tabular-nums sm:text-[30px]"
-            style={{ color: satisfactionColorOnImage(property.satisfaction) }}
-          >
-            {Math.round(property.satisfaction)} %
-          </span>
-        </div>
         </div>
       </div>
     </div>
@@ -824,13 +674,9 @@ function DetailHeader({ property }: { property: GardenProperty }) {
 
 function SectionLabel({ children, trailing }: { children: React.ReactNode; trailing?: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="rr-label text-[9.5px] leading-none">{children}</span>
-      {trailing && (
-        <span className="rr-label text-[9.5px] font-medium leading-none tracking-[0.08em] normal-case">
-          {trailing}
-        </span>
-      )}
+    <div className="section-label">
+      <span className="section-label__text">{children}</span>
+      {trailing && <span className="section-label__trailing">{trailing}</span>}
     </div>
   );
 }
@@ -849,11 +695,10 @@ function ActionButtons({
   const recommended = recommendedTask(property);
 
   return (
-    <div className="flex gap-2.5">
+    <div className="actions">
       {KINDS.map((kind) => {
         const automatic = isAutomated(property, kind);
         const running = property.task?.kind === kind ? property.task : undefined;
-        const active = Boolean(running);
         const progress = running
           ? Math.min(100, Math.max(0, ((Date.now() - running.startedAt) / (running.endsAt - running.startedAt)) * 100))
           : 0;
@@ -872,51 +717,23 @@ function ActionButtons({
           <button
             key={kind}
             type="button"
-            className={`relative flex flex-1 items-center justify-center overflow-hidden rounded-[9px] border transition-colors ${
-              compact ? 'min-h-11 px-1 text-[12.5px] font-semibold' : 'min-h-14 flex-col gap-1 px-1.5 py-2.5'
+            className={`action ${compact ? 'action--compact' : ''} ${on ? 'action--on' : ''} ${
+              running ? 'action--running' : ''
             }`}
-            style={{
-              // Die laufende Aktion bleibt gesperrt, hebt sich aber vom stumpfen
-              // Grau der uebrigen gesperrten Schaltflaechen ab.
-              background: on ? 'var(--primary)' : active ? 'var(--secondary)' : 'var(--paper)',
-              color: on ? 'var(--paper)' : active ? 'var(--primary)' : disabled ? '#a8ac9d' : 'var(--primary)',
-              borderColor: on
-                ? 'var(--primary)'
-                : active
-                  ? 'rgba(63,107,40,.45)'
-                  : disabled
-                    ? 'rgba(36,41,31,.12)'
-                    : 'rgba(63,107,40,.35)',
-              cursor: disabled ? 'default' : 'pointer',
-            }}
             disabled={disabled}
             onClick={() => onStart(kind)}
           >
-            <span className={compact ? 'whitespace-nowrap' : 'text-[13px] font-semibold leading-none'}>
+            <span className="action__label">
               {compact && running ? formatDuration(running.endsAt - Date.now()) : ACTION_LABELS[kind]}
             </span>
             {!compact && (
-              <span
-                className="whitespace-nowrap font-mono text-[9.5px] font-medium leading-none"
-                style={{
-                  color: on
-                    ? 'rgba(255,253,247,.82)'
-                    : active
-                      ? 'var(--ink-soft)'
-                      : disabled
-                        ? '#b9bcae'
-                        : 'var(--ink-mute)',
-                }}
-              >
+              <span className="action__meta">
                 {running ? formatDuration(running.endsAt - Date.now()) : meta}
               </span>
             )}
             {running && (
-              <span className="absolute inset-x-0 bottom-0 h-[3px] bg-track" aria-hidden="true">
-                <span
-                  className="block h-full bg-primary transition-[width] duration-1000 ease-linear"
-                  style={{ width: `${progress}%` }}
-                />
+              <span className="action__track" aria-hidden="true">
+                <span className="action__progress" style={{ width: `${progress}%` }} />
               </span>
             )}
           </button>
@@ -951,26 +768,20 @@ function UpgradeShelf({
 
   return (
     <>
-      {/* Mobil: kompakte Zeilen (Entwurf 3a) */}
-      <div className="flex flex-col gap-3 sm:hidden">
+      {/* Mobil: kompakte Zeilen */}
+      <div className="shelf-rows">
         {steps.map(({ kind, step, isInstall, price, affordable, installed }) => (
-          <div key={kind} className="flex items-center gap-2.5">
-            <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-              <span className="truncate text-[12.5px] font-semibold leading-tight text-ink">
-                {step ? step.name : installed.name}
-              </span>
-              <span className="truncate text-[10.5px] leading-tight text-ink-mute">
+          <div key={kind} className="shelf-row">
+            <div className="shelf-row__text">
+              <span className="shelf-row__name">{step ? step.name : installed.name}</span>
+              <span className="shelf-row__desc">
                 {TASK_LABELS[kind]} · {step ? step.description : 'Vollständig ausgebaut'}
               </span>
             </div>
             {step && (
               <button
                 type="button"
-                className="flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-[9px] border bg-surface px-[13px] font-mono text-[11.5px] font-semibold leading-none disabled:cursor-default"
-                style={{
-                  borderColor: affordable ? 'rgba(63,107,40,.3)' : 'rgba(36,41,31,.12)',
-                  color: affordable ? 'var(--primary)' : '#a8ac9d',
-                }}
+                className="shelf-row__buy"
                 disabled={!affordable}
                 onClick={() => (isInstall ? onInstall(kind) : onUnlock(kind))}
               >
@@ -981,29 +792,23 @@ function UpgradeShelf({
         ))}
       </div>
 
-      {/* Desktop: drei Karten (Entwurf 3b) */}
-      <div className="hidden gap-3 sm:grid sm:grid-cols-3">
+      {/* Desktop: drei Karten */}
+      <div className="shelf-cards">
         {steps.map(({ kind, step, isInstall, price, affordable, installed }) => (
-          <div key={kind} className="flex min-w-0 flex-col gap-2 rounded-[9px] border border-border bg-surface p-3.5">
-            <span className="rr-label text-[9px] font-medium leading-none tracking-[0.12em]">
-              {TASK_LABELS[kind]}
-            </span>
+          <div key={kind} className="shelf-card">
+            <span className="shelf-card__kind">{TASK_LABELS[kind]}</span>
             {step ? (
               <>
-                <span className="text-[13px] font-semibold leading-tight text-ink">{step.name}</span>
-                <span className="text-[11px] leading-snug text-ink-mute">{step.description}</span>
+                <span className="shelf-card__name">{step.name}</span>
+                <span className="shelf-card__desc">{step.description}</span>
                 {!isInstall && game.reputation < step.reputation && (
-                  <span className="flex items-center gap-1.5 font-mono text-[10px] leading-none text-ink-mute">
-                    <LockKeyhole className="size-3" aria-hidden="true" /> Reputation {step.reputation}
+                  <span className="shelf-card__lock">
+                    <LockKeyhole aria-hidden="true" /> Reputation {step.reputation}
                   </span>
                 )}
                 <button
                   type="button"
-                  className="mt-auto flex items-center justify-center rounded-[7px] border bg-paper px-3 py-2.5 font-mono text-[11px] font-semibold leading-none transition-colors disabled:cursor-default"
-                  style={{
-                    borderColor: affordable ? 'rgba(63,107,40,.35)' : 'rgba(36,41,31,.12)',
-                    color: affordable ? 'var(--primary)' : '#a8ac9d',
-                  }}
+                  className="shelf-card__buy"
                   disabled={!affordable}
                   onClick={() => (isInstall ? onInstall(kind) : onUnlock(kind))}
                 >
@@ -1012,9 +817,9 @@ function UpgradeShelf({
               </>
             ) : (
               <>
-                <span className="text-[13px] font-semibold leading-tight text-ink">{installed.name}</span>
-                <span className="flex items-center gap-1.5 text-[11px] leading-snug text-ink-mute">
-                  <Check className="size-3.5 text-primary" aria-hidden="true" /> Vollständig ausgebaut
+                <span className="shelf-card__name">{installed.name}</span>
+                <span className="shelf-card__done">
+                  <Check aria-hidden="true" /> Vollständig ausgebaut
                 </span>
               </>
             )}
@@ -1041,51 +846,45 @@ function PropertyDetail({
   onInstall: (kind: TaskKind) => void;
 }) {
   return (
-    <section
-      className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:overflow-hidden lg:p-[22px_26px]"
-      aria-label={property.name}
-    >
+    <section className="detail" aria-label={property.name}>
       <DetailHeader property={property} />
 
       {property.rescueUntil && (
-        <div
-          className="flex shrink-0 items-center gap-3 rounded-xl border p-3.5"
-          style={{ background: '#f6e3dd', borderColor: 'rgba(176,69,47,.35)' }}
-        >
-          <CircleAlert className="size-5 shrink-0" style={{ color: 'var(--tone-bad)' }} aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-ink">Vertrag akut gefährdet</p>
-            <p className="text-xs text-ink-soft">
+        <div className="rescue">
+          <CircleAlert className="rescue__icon" aria-hidden="true" />
+          <div className="rescue__body">
+            <p className="rescue__title">Vertrag akut gefährdet</p>
+            <p className="rescue__note">
               Stelle die Zufriedenheit in den nächsten {formatDuration(property.rescueUntil - Date.now())} wieder her.
             </p>
           </div>
         </div>
       )}
 
-      <div className="flex shrink-0 flex-col gap-3.5 rounded-xl border border-border bg-paper p-4 sm:p-5 lg:shrink lg:overflow-y-auto">
-        <div className="flex flex-col gap-3.5">
+      <div className="panel">
+        <div className="panel__section panel__section--values">
           <SectionLabel>Werte</SectionLabel>
-          {/* Mobil Balken, ab Desktop Ringe — so wie 3a gegenüber 3b */}
-          <div className="flex flex-col gap-[9px] lg:hidden">
+          {/* Mobil Balken, ab Desktop Ringe */}
+          <div className="gauges--bars">
             {KINDS.map((kind) => (
               <Gauge key={kind} kind={kind} value={propertyMetricPercent(property, kind)} variant="bar" />
             ))}
           </div>
-          <div className="hidden items-start gap-1.5 lg:flex">
+          <div className="gauges--rings">
             {KINDS.map((kind) => (
-              <div key={kind} className="flex flex-1 justify-center">
+              <div key={kind}>
                 <Gauge kind={kind} value={propertyMetricPercent(property, kind)} variant="ring" />
               </div>
             ))}
           </div>
         </div>
 
-        <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
+        <div className="panel__section panel__section--divided">
           <SectionLabel trailing={payoutHint(property)}>Aktion</SectionLabel>
           <ActionButtons property={property} manualBusy={manualBusy} onStart={onStart} />
         </div>
 
-        <div className="flex flex-col gap-2.5 border-t border-border/60 pt-4">
+        <div className="panel__section panel__section--divided">
           <SectionLabel>Upgrades · nächster Schritt</SectionLabel>
           <UpgradeShelf game={game} property={property} onUnlock={onUnlock} onInstall={onInstall} />
         </div>
@@ -1094,7 +893,7 @@ function PropertyDetail({
   );
 }
 
-/** Mobile Übersicht aus Entwurf 2a: Kartenstapel, jede Karte führt in die Detailseite. */
+/** Mobile Übersicht: Kartenstapel, jede Karte führt in die Detailseite. */
 function MobileOverview({
   properties,
   manualBusy,
@@ -1114,57 +913,50 @@ function MobileOverview({
   const visible = properties.filter(match);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+    <div className="overview">
       <FilterChips properties={properties} active={filter} onChange={onFilter} />
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-4 pt-0.5">
+      <div className="overview__list">
         {visible.length === 0 ? (
-          <div className="grid flex-1 place-items-center rounded-xl border border-dashed border-border bg-paper p-8 text-center">
-            <p className="text-[12.5px] text-ink-soft">Kein Grundstück passt zu diesem Filter.</p>
+          <div className="overview__empty">
+            <p>Kein Grundstück passt zu diesem Filter.</p>
           </div>
         ) : (
           visible.map((property) => (
-            <div
-              key={property.id}
-              className="flex flex-col gap-2.5 rounded-[11px] border border-border bg-paper p-3.5"
-            >
+            <div key={property.id} className="pcard">
               <button
                 type="button"
-                className="flex flex-col gap-2.5 text-left"
+                className="pcard__open"
                 onClick={() => onOpen(property.id)}
                 aria-label={`${property.name} öffnen`}
               >
-                <span className="flex items-start justify-between gap-2">
-                  <span className="flex min-w-0 flex-col gap-1.5">
-                    <span className="truncate text-[14.5px] font-semibold leading-tight text-ink">
-                      {property.name}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-[7px]">
+                <span className="pcard__top">
+                  <span className="pcard__titles">
+                    <span className="pcard__name">{property.name}</span>
+                    <span className="pcard__tags">
                       <StatusChip property={property} />
-                      <span className="font-mono text-[10px] font-medium leading-none text-ink-mute">
+                      <span className="pcard__meta">
                         {property.size.toLocaleString('de-DE')} m² · {property.type}
                       </span>
                     </span>
                   </span>
-                  <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="pcard__score">
                     <span
-                      className="font-mono text-[13px] font-semibold leading-none tabular-nums"
+                      className="pcard__score-value"
                       style={{ color: satisfactionColor(property.satisfaction) }}
                     >
                       {Math.round(property.satisfaction)} %
                     </span>
-                    <span className="rr-label text-[8px] leading-none tracking-[0.12em]">Zufrieden</span>
+                    <span className="pcard__score-label">Zufrieden</span>
                   </span>
                 </span>
-                <span className="flex flex-col gap-[9px]">
+                <span className="pcard__gauges">
                   {KINDS.map((kind) => (
                     <Gauge key={kind} kind={kind} value={propertyMetricPercent(property, kind)} variant="bar" />
                   ))}
                 </span>
               </button>
-              <div className="flex flex-col gap-2.5 border-t border-border/50 pt-2.5">
-                <span className="rr-label text-[9px] font-medium leading-tight tracking-[0.08em] normal-case">
-                  {payoutHint(property)}
-                </span>
+              <div className="pcard__foot">
+                <span className="pcard__hint">{payoutHint(property)}</span>
                 <ActionButtons
                   property={property}
                   manualBusy={manualBusy}
@@ -1192,70 +984,59 @@ function OffersView({
   const wait = Math.max(0, game.nextOfferAt - Date.now());
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-5 p-4 lg:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className="rr-label text-[9.5px] leading-none">Neue Stammkunden</span>
-          <h2 className="text-[27px] font-bold leading-tight text-ink">Vertragsangebote</h2>
+    <section className="view">
+      <div className="view__head">
+        <div className="view__titles">
+          <span className="view__eyebrow">Neue Stammkunden</span>
+          <h2 className="view__title">Vertragsangebote</h2>
         </div>
-        <span className="flex items-center gap-2 rounded-lg border border-border bg-paper px-3 py-2 font-mono text-[10.5px] font-medium leading-none text-ink-soft">
-          <Timer className="size-3.5" aria-hidden="true" /> Nächste Prüfung in {formatDuration(wait)}
+        <span className="timer-badge">
+          <Timer aria-hidden="true" /> Nächste Prüfung in {formatDuration(wait)}
         </span>
       </div>
 
       {game.offers.length === 0 ? (
-        <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-border bg-paper p-10 text-center">
-          <div className="max-w-md">
-            <span className="mx-auto mb-4 grid size-12 place-items-center rounded-xl bg-secondary text-primary">
+        <div className="empty">
+          <div className="empty__inner">
+            <span className="empty__icon">
               <BriefcaseBusiness />
             </span>
-            <h3 className="text-lg font-semibold text-ink">Noch keine passenden Anfragen</h3>
-            <p className="mt-2 text-[12.5px] text-ink-soft">
+            <h3 className="empty__title">Noch keine passenden Anfragen</h3>
+            <p className="empty__text">
               Pflege deine aktuellen Grundstücke weiter. Mit Reputation 2 werden erste Angebote
               freigeschaltet.
             </p>
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="offers">
           {game.offers.map((offer) => (
-            <div key={offer.id} className="flex flex-col gap-3.5 rounded-xl border border-border bg-paper p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[17px] font-bold leading-tight text-ink">{offer.name}</span>
-                  <span className="text-[11.5px] text-ink-mute">{offer.subtitle}</span>
+            <div key={offer.id} className="offer">
+              <div className="offer__head">
+                <div className="offer__titles">
+                  <span className="offer__name">{offer.name}</span>
+                  <span className="offer__subtitle">{offer.subtitle}</span>
                 </div>
-                <span
-                  className="shrink-0 whitespace-nowrap rounded-[5px] px-2 py-1 font-mono text-[9px] font-semibold uppercase leading-none tracking-[0.08em]"
-                  style={{ background: '#eceadf', color: 'var(--ink-soft)' }}
-                >
-                  {offer.type}
-                </span>
+                <span className="offer__type">{offer.type}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-surface p-3">
-                  <span className="rr-label text-[9px] leading-none">Fläche</span>
-                  <p className="mt-1.5 font-mono text-sm font-semibold text-ink tabular-nums">
-                    {offer.size.toLocaleString('de-DE')} m²
-                  </p>
+              <div className="offer__stats">
+                <div className="stat">
+                  <span className="stat__label">Fläche</span>
+                  <p className="stat__value">{offer.size.toLocaleString('de-DE')} m²</p>
                 </div>
-                <div className="rounded-lg bg-surface p-3">
-                  <span className="rr-label text-[9px] leading-none">Optimal</span>
-                  <p className="mt-1.5 font-mono text-sm font-semibold text-ink tabular-nums">
-                    {formatMoney(offer.payout * 1.2)}
-                  </p>
+                <div className="stat">
+                  <span className="stat__label">Optimal</span>
+                  <p className="stat__value">{formatMoney(offer.payout * 1.2)}</p>
                 </div>
               </div>
-              <dl className="flex flex-col gap-1.5 text-[11.5px] text-ink-mute">
-                <div className="flex justify-between gap-2">
+              <dl className="offer__facts">
+                <div className="offer__fact">
                   <dt>Wachstum</dt>
-                  <dd className="font-semibold text-ink">
-                    {offer.growthFactor > 1.1 ? 'Schnell' : offer.growthFactor < 0.98 ? 'Ruhig' : 'Normal'}
-                  </dd>
+                  <dd>{offer.growthFactor > 1.1 ? 'Schnell' : offer.growthFactor < 0.98 ? 'Ruhig' : 'Normal'}</dd>
                 </div>
-                <div className="flex justify-between gap-2">
+                <div className="offer__fact">
                   <dt>Boden</dt>
-                  <dd className="font-semibold text-ink">
+                  <dd>
                     {offer.drainage > 1.1
                       ? 'Trocknet schnell'
                       : offer.drainage < 0.95
@@ -1263,20 +1044,16 @@ function OffersView({
                         : 'Ausgeglichen'}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-2">
+                <div className="offer__fact">
                   <dt>Anspruch</dt>
-                  <dd className="font-semibold text-ink">
-                    {offer.customerDemand > 1.2 ? 'Hoch' : 'Normal'}
-                  </dd>
+                  <dd>{offer.customerDemand > 1.2 ? 'Hoch' : 'Normal'}</dd>
                 </div>
               </dl>
-              <div className="mt-auto flex gap-2 pt-1">
-                <Button variant="outline" className="flex-1" onClick={() => onDecline(offer.id)}>
+              <div className="offer__actions">
+                <Button variant="outline" onClick={() => onDecline(offer.id)}>
                   Ablehnen
                 </Button>
-                <Button className="flex-1" onClick={() => onAccept(offer.id)}>
-                  Annehmen
-                </Button>
+                <Button onClick={() => onAccept(offer.id)}>Annehmen</Button>
               </div>
             </div>
           ))}
@@ -1302,16 +1079,16 @@ function UpgradesView({
   onInstallChemistry: (kind: 'fertilizer' | 'weedControl') => void;
 }) {
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-5 p-4 lg:p-6">
-      <div className="flex flex-col gap-1.5">
-        <span className="rr-label text-[9.5px] leading-none">Wissen freischalten, vor Ort investieren</span>
-        <h2 className="text-[27px] font-bold leading-tight text-ink">Technik &amp; Pflege</h2>
-        <p className="text-[12.5px] text-ink-soft">
-          Ausgewähltes Grundstück: <strong className="font-semibold text-ink">{selected.name}</strong>
+    <section className="view">
+      <div className="view__titles">
+        <span className="view__eyebrow">Wissen freischalten, vor Ort investieren</span>
+        <h2 className="view__title">Technik &amp; Pflege</h2>
+        <p className="view__note">
+          Ausgewähltes Grundstück: <strong>{selected.name}</strong>
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="upgrades">
         {KINDS.map((kind) => {
           const unlockedLevel = game.unlocked[kind];
           const installedLevel = selected.equipment[kind];
@@ -1323,58 +1100,40 @@ function UpgradesView({
             nextUnlock && game.reputation >= nextUnlock.reputation && game.money >= nextUnlock.unlockCost;
 
           return (
-            <div key={kind} className="flex flex-col gap-3.5 rounded-xl border border-border bg-paper p-5">
-              <div className="flex flex-col gap-1">
-                <span className="rr-label text-[9.5px] leading-none">{TASK_LABELS[kind]}</span>
-                <span className="text-[17px] font-bold leading-tight text-ink">{current.name}</span>
-                <span className="font-mono text-[10px] font-medium leading-none text-ink-mute">
-                  vor Ort installiert
-                </span>
+            <div key={kind} className="ucard">
+              <div className="ucard__head">
+                <span className="ucard__kind">{TASK_LABELS[kind]}</span>
+                <span className="ucard__name">{current.name}</span>
+                <span className="ucard__note">vor Ort installiert</span>
               </div>
 
               {nextInstall ? (
-                <div
-                  className="flex flex-col gap-2 rounded-[9px] border p-3.5"
-                  style={{ background: '#eef2e6', borderColor: 'rgba(79,122,47,.28)' }}
-                >
-                  <span className="rr-label text-[9px] leading-none">Anschaffen</span>
-                  <span className="text-[13px] font-semibold leading-tight text-ink">{nextInstall.name}</span>
-                  <span className="text-[11px] leading-snug text-ink-mute">{nextInstall.description}</span>
-                  <Button
-                    className="mt-1 w-full"
-                    disabled={game.money < nextInstall.installCost}
-                    onClick={() => onInstall(kind)}
-                  >
+                <div className="ustep ustep--install">
+                  <span className="ustep__label">Anschaffen</span>
+                  <span className="ustep__name">{nextInstall.name}</span>
+                  <span className="ustep__desc">{nextInstall.description}</span>
+                  <Button disabled={game.money < nextInstall.installCost} onClick={() => onInstall(kind)}>
                     Für {formatMoney(nextInstall.installCost)} installieren
                   </Button>
                 </div>
               ) : nextUnlock ? (
-                <div className="flex flex-col gap-2 rounded-[9px] border border-border bg-surface p-3.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="rr-label text-[9px] leading-none">Nächste Forschung</span>
-                    {game.reputation < nextUnlock.reputation && (
-                      <LockKeyhole className="size-3.5 text-ink-mute" aria-hidden="true" />
-                    )}
+                <div className="ustep ustep--research">
+                  <div className="ustep__head">
+                    <span className="ustep__label">Nächste Forschung</span>
+                    {game.reputation < nextUnlock.reputation && <LockKeyhole aria-hidden="true" />}
                   </div>
-                  <span className="text-[13px] font-semibold leading-tight text-ink">{nextUnlock.name}</span>
-                  <span className="text-[11px] leading-snug text-ink-mute">{nextUnlock.description}</span>
-                  <span className="font-mono text-[10px] font-medium leading-none text-ink-soft">
-                    Benötigt Reputation {nextUnlock.reputation}
-                  </span>
-                  <Button
-                    variant="outline"
-                    className="mt-1 w-full"
-                    disabled={!canResearch}
-                    onClick={() => onUnlock(kind)}
-                  >
+                  <span className="ustep__name">{nextUnlock.name}</span>
+                  <span className="ustep__desc">{nextUnlock.description}</span>
+                  <span className="ustep__req">Benötigt Reputation {nextUnlock.reputation}</span>
+                  <Button variant="outline" disabled={!canResearch} onClick={() => onUnlock(kind)}>
                     Für {formatMoney(nextUnlock.unlockCost)} freischalten
                   </Button>
                 </div>
               ) : (
-                <div className="flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-[9px] bg-surface p-4 text-center">
-                  <Check className="size-5 text-primary" aria-hidden="true" />
-                  <span className="text-[13px] font-semibold text-ink">Vollständig ausgebaut</span>
-                  <span className="text-[11px] text-ink-mute">Die beste Technik ist installiert.</span>
+                <div className="udone">
+                  <Check aria-hidden="true" />
+                  <span className="udone__title">Vollständig ausgebaut</span>
+                  <span className="udone__text">Die beste Technik ist installiert.</span>
                 </div>
               )}
             </div>
@@ -1382,16 +1141,14 @@ function UpgradesView({
         })}
       </div>
 
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-paper p-5">
-        <div className="flex flex-col gap-1">
-          <span className="flex items-center gap-2 text-[17px] font-bold leading-tight text-ink">
-            <FlaskConical className="size-4.5 text-primary" aria-hidden="true" /> Rasenpflege
+      <div className="care">
+        <div className="care__head">
+          <span className="care__title">
+            <FlaskConical aria-hidden="true" /> Rasenpflege
           </span>
-          <span className="text-[12.5px] text-ink-soft">
-            Optionale Behandlungen mit klaren Vor- und Nachteilen.
-          </span>
+          <span className="care__note">Optionale Behandlungen mit klaren Vor- und Nachteilen.</span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="care__grid">
           {(
             [
               {
@@ -1416,34 +1173,22 @@ function UpgradesView({
             const unlocked = game.chemistryUnlocked[item.id];
             const installed = selected[item.id];
             return (
-              <div key={item.id} className="flex flex-col gap-2 rounded-[9px] border border-border bg-surface p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="text-[13px] font-semibold leading-tight text-ink">{item.name}</span>
-                  {installed && (
-                    <span
-                      className="shrink-0 rounded-[5px] px-2 py-1 font-mono text-[9px] font-semibold uppercase leading-none tracking-[0.08em]"
-                      style={{ background: '#e8efdf', color: 'var(--tone-ok)' }}
-                    >
-                      Aktiv
-                    </span>
-                  )}
+              <div key={item.id} className="care-item">
+                <div className="care-item__head">
+                  <span className="care-item__name">{item.name}</span>
+                  {installed && <span className="care-item__badge">Aktiv</span>}
                 </div>
-                <span className="text-[11px] leading-snug text-ink-mute">{item.description}</span>
+                <span className="care-item__desc">{item.description}</span>
                 {!unlocked ? (
                   <Button
                     variant="outline"
-                    className="mt-auto w-full"
                     disabled={game.reputation < item.rep || game.money < item.unlock}
                     onClick={() => onUnlockChemistry(item.id)}
                   >
                     Freischalten · {formatMoney(item.unlock)} · Rep. {item.rep}
                   </Button>
                 ) : !installed ? (
-                  <Button
-                    className="mt-auto w-full"
-                    disabled={game.money < item.install}
-                    onClick={() => onInstallChemistry(item.id)}
-                  >
+                  <Button disabled={game.money < item.install} onClick={() => onInstallChemistry(item.id)}>
                     Für {formatMoney(item.install)} anwenden
                   </Button>
                 ) : null}
@@ -1498,10 +1243,10 @@ export default function Home() {
 
   if (!game || !selected) {
     return (
-      <main className="grid min-h-screen place-items-center bg-surface">
-        <div className="text-center">
-          <span className="mx-auto mb-3 block size-10 animate-pulse rounded-lg" style={{ background: LOGO_STRIPES }} />
-          <p className="text-sm font-medium text-ink-soft">Der Betrieb wird vorbereitet…</p>
+      <main className="app__loading">
+        <div>
+          <span className="app__loading-mark" />
+          <p className="app__loading-text">Der Betrieb wird vorbereitet…</p>
         </div>
       </main>
     );
@@ -1524,7 +1269,7 @@ export default function Home() {
   };
 
   return (
-    <main className="flex h-[100dvh] flex-col overflow-hidden bg-surface text-ink">
+    <main className="app">
       <AppHeader
         money={game.money}
         reputation={game.reputation}
@@ -1542,7 +1287,7 @@ export default function Home() {
         onBack={view === 'overview' && mobileDetail ? () => setMobileDetail(false) : undefined}
       />
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div className="app__body">
         <ToastStack
           event={game.activeEvent}
           toasts={toasts}
@@ -1555,32 +1300,18 @@ export default function Home() {
           settingsOpen={settingsOpen}
           onSettings={() => setSettingsOpen(true)}
         />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {view === 'overview' && (
-          <>
-            {/* Desktop: Liste links, Detail rechts (Entwurf 3b) */}
-            <div className="hidden min-h-0 flex-1 lg:flex">
-              <PropertyList
-                properties={game.properties}
-                selectedId={selected.id}
-                filter={filter}
-                onFilter={setFilter}
-                onSelect={setSelectedId}
-              />
-              <PropertyDetail
-                game={game}
-                property={selected}
-                manualBusy={manualBusy}
-                onStart={(kind) => startTask(selected.id, kind)}
-                onUnlock={unlockEquipment}
-                onInstall={(kind) => installEquipment(selected.id, kind)}
-              />
-            </div>
-
-            {/* Mobil: Übersicht 2a, per Tippen auf eine Kachel zur Detailseite 3a */}
-            {mobileDetail ? (
-              <div className="flex min-h-0 flex-1 flex-col lg:hidden">
-                <PropertyRail properties={game.properties} selectedId={selected.id} onSelect={setSelectedId} />
+        <div className="app__main">
+          {view === 'overview' && (
+            <>
+              {/* Desktop: Liste links, Detail rechts */}
+              <div className="overview-desktop">
+                <PropertyList
+                  properties={game.properties}
+                  selectedId={selected.id}
+                  filter={filter}
+                  onFilter={setFilter}
+                  onSelect={setSelectedId}
+                />
                 <PropertyDetail
                   game={game}
                   property={selected}
@@ -1590,44 +1321,58 @@ export default function Home() {
                   onInstall={(kind) => installEquipment(selected.id, kind)}
                 />
               </div>
-            ) : (
-              <MobileOverview
-                properties={game.properties}
-                manualBusy={manualBusy}
-                filter={filter}
-                onFilter={setFilter}
-                onOpen={openProperty}
-                onStart={startTask}
+
+              {/* Mobil: Übersicht, per Tippen auf eine Kachel zur Detailseite */}
+              {mobileDetail ? (
+                <div className="detail-mobile">
+                  <PropertyRail properties={game.properties} selectedId={selected.id} onSelect={setSelectedId} />
+                  <PropertyDetail
+                    game={game}
+                    property={selected}
+                    manualBusy={manualBusy}
+                    onStart={(kind) => startTask(selected.id, kind)}
+                    onUnlock={unlockEquipment}
+                    onInstall={(kind) => installEquipment(selected.id, kind)}
+                  />
+                </div>
+              ) : (
+                <MobileOverview
+                  properties={game.properties}
+                  manualBusy={manualBusy}
+                  filter={filter}
+                  onFilter={setFilter}
+                  onOpen={openProperty}
+                  onStart={startTask}
+                />
+              )}
+            </>
+          )}
+          {view === 'offers' && (
+            <div className="app__scroll">
+              <OffersView
+                game={game}
+                onAccept={(id) => {
+                  // Bei mehreren Angeboten bleibt die Liste stehen, damit weiter geprüft werden kann.
+                  const wasLastOffer = game.offers.length <= 1;
+                  acceptOffer(id);
+                  if (wasLastOffer) setView('overview');
+                }}
+                onDecline={declineOffer}
               />
-            )}
-          </>
-        )}
-        {view === 'offers' && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <OffersView
-              game={game}
-              onAccept={(id) => {
-                // Bei mehreren Angeboten bleibt die Liste stehen, damit weiter geprüft werden kann.
-                const wasLastOffer = game.offers.length <= 1;
-                acceptOffer(id);
-                if (wasLastOffer) setView('overview');
-              }}
-              onDecline={declineOffer}
-            />
-          </div>
-        )}
-        {view === 'upgrades' && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <UpgradesView
-              game={game}
-              selected={selected}
-              onUnlock={unlockEquipment}
-              onInstall={(kind) => installEquipment(selected.id, kind)}
-              onUnlockChemistry={unlockChemistry}
-              onInstallChemistry={(kind) => installChemistry(selected.id, kind)}
-            />
-          </div>
-        )}
+            </div>
+          )}
+          {view === 'upgrades' && (
+            <div className="app__scroll">
+              <UpgradesView
+                game={game}
+                selected={selected}
+                onUnlock={unlockEquipment}
+                onInstall={(kind) => installEquipment(selected.id, kind)}
+                onUnlockChemistry={unlockChemistry}
+                onInstallChemistry={(kind) => installChemistry(selected.id, kind)}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1639,40 +1384,33 @@ export default function Home() {
       />
 
       {offlineSummary && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4" role="presentation">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="offline-title"
-            className="w-full max-w-md rounded-xl border border-border bg-paper p-5 shadow-2xl"
-          >
-            <span className="mb-4 block size-10 rounded-lg" style={{ background: LOGO_STRIPES }} aria-hidden="true" />
-            <h2 id="offline-title" className="text-[22px] font-bold leading-tight text-ink">
+        <div className="overlay" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="offline-title" className="dialog summary">
+            <span className="summary__logo" aria-hidden="true" />
+            <h2 id="offline-title" className="summary__title">
               Willkommen zurück
             </h2>
-            <p className="mt-1 text-[12.5px] text-ink-soft">
+            <p className="summary__text">
               Dein Betrieb lief {humanOfflineDuration(offlineSummary.elapsedMs)} ohne dich weiter.
             </p>
-            <div className="my-5 grid grid-cols-3 gap-2">
-              <div className="rounded-lg bg-surface p-3 text-center">
-                <Banknote className="mx-auto mb-1 size-4 text-primary" aria-hidden="true" />
-                <strong className="block font-mono text-sm text-ink tabular-nums">
-                  {formatMoney(offlineSummary.earned)}
-                </strong>
-                <span className="rr-label text-[8px] leading-none">verdient</span>
+            <div className="summary__stats">
+              <div className="summary-stat">
+                <Banknote aria-hidden="true" />
+                <strong className="summary-stat__value">{formatMoney(offlineSummary.earned)}</strong>
+                <span className="summary-stat__label">verdient</span>
               </div>
-              <div className="rounded-lg bg-surface p-3 text-center">
-                <Check className="mx-auto mb-1 size-4 text-primary" aria-hidden="true" />
-                <strong className="block font-mono text-sm text-ink tabular-nums">{offlineSummary.completed}</strong>
-                <span className="rr-label text-[8px] leading-none">erledigt</span>
+              <div className="summary-stat">
+                <Check aria-hidden="true" />
+                <strong className="summary-stat__value">{offlineSummary.completed}</strong>
+                <span className="summary-stat__label">erledigt</span>
               </div>
-              <div className="rounded-lg bg-surface p-3 text-center">
-                <CircleAlert className="mx-auto mb-1 size-4" style={{ color: 'var(--tone-warn)' }} aria-hidden="true" />
-                <strong className="block font-mono text-sm text-ink tabular-nums">{offlineSummary.critical}</strong>
-                <span className="rr-label text-[8px] leading-none">kritisch</span>
+              <div className="summary-stat summary-stat--warn">
+                <CircleAlert aria-hidden="true" />
+                <strong className="summary-stat__value">{offlineSummary.critical}</strong>
+                <span className="summary-stat__label">kritisch</span>
               </div>
             </div>
-            <Button className="w-full" autoFocus onClick={dismissOfflineSummary}>
+            <Button autoFocus onClick={dismissOfflineSummary}>
               Betrieb prüfen
             </Button>
           </section>
@@ -1680,41 +1418,34 @@ export default function Home() {
       )}
 
       {settingsOpen && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4"
-          onMouseDown={() => setSettingsOpen(false)}
-        >
+        <div className="overlay" onMouseDown={() => setSettingsOpen(false)}>
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="settings-title"
-            className="w-full max-w-sm rounded-xl border border-border bg-paper p-5 shadow-2xl"
+            className="dialog dialog--narrow"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="settings__head">
               <div>
-                <h2 id="settings-title" className="text-[17px] font-bold leading-tight text-ink">
+                <h2 id="settings-title" className="settings__title">
                   Einstellungen
                 </h2>
-                <p className="mt-1 text-[12.5px] text-ink-soft">
+                <p className="settings__text">
                   Der Spielstand wird automatisch in diesem Browser gespeichert.
                 </p>
               </div>
-              <Button variant="ghost" size="icon-sm" aria-label="Schließen" onClick={() => setSettingsOpen(false)}>
+              <Button variant="ghost" size="icon" aria-label="Schließen" onClick={() => setSettingsOpen(false)}>
                 <X />
               </Button>
             </div>
-            <div
-              className="mt-5 rounded-[9px] border p-3.5"
-              style={{ background: '#f6e3dd', borderColor: 'rgba(176,69,47,.3)' }}
-            >
-              <p className="text-[13px] font-semibold text-ink">Betrieb neu starten</p>
-              <p className="mt-1 text-[11px] text-ink-soft">
+            <div className="danger">
+              <p className="danger__title">Betrieb neu starten</p>
+              <p className="danger__text">
                 Entfernt Geld, Verträge und alle freigeschalteten Upgrades.
               </p>
               <Button
                 variant="destructive"
-                className="mt-3"
                 onClick={() => {
                   setSettingsOpen(false);
                   resetGame();

@@ -1,0 +1,96 @@
+@use 'mixins' as *;
+
+/// Die Farbe je Aufgabe, einmal gesetzt und von Gauge und Kachelpunkten geteilt.
+.kind--mow {
+  --kind: var(--kind-grass);
+}
+
+.kind--water {
+  --kind: var(--kind-water);
+}
+
+.kind--maintain {
+  --kind: var(--kind-cond);
+}
+
+/// Statusfarben als Klassen statt als Nachschlagetabelle im Code.
+.tone--danger {
+  --tone: var(--tone-bad);
+  --tone-bg: var(--bg-bad);
+}
+
+.tone--warning {
+  --tone: var(--tone-warn);
+  --tone-bg: var(--bg-warn);
+}
+
+.tone--info {
+  --tone: var(--kind-water);
+  --tone-bg: var(--bg-info);
+}
+
+.tone--good {
+  --tone: var(--tone-ok);
+  --tone-bg: var(--bg-ok);
+}
+
+.tone--neutral {
+  --tone: var(--ink-mute);
+  --tone-bg: var(--bg-neutral);
+}
+
+.chip {
+  @include label(9px, 0.08em);
+
+  flex-shrink: 0;
+  padding: 4px 7px;
+  color: var(--tone);
+  white-space: nowrap;
+  background: var(--tone-bg);
+  border-radius: var(--radius-xs);
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--tone);
+  border-radius: 999px;
+}
+
+/// Die Leiste bleibt vollständig stehen, damit die Schaltflächen nicht springen.
+.filters {
+  display: flex;
+  flex-shrink: 0;
+  gap: 7px;
+  padding: 10px 16px;
+  overflow-x: auto;
+}
+
+.filters--divided {
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.filter {
+  flex-shrink: 0;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  background: var(--paper);
+  border: 1px solid var(--border-chip);
+  border-radius: var(--radius-lg);
+}
+
+.filter--on {
+  color: var(--surface);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.filter--empty {
+  color: #b0b4a6;
+  border-color: var(--border-soft);
+}

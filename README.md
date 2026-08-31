@@ -13,8 +13,9 @@ Ein deutschsprachiges Casual-Idle-Spiel über den Aufbau eines Rasenpflegebetrie
 
 ## Technik
 
-Reine Client-Anwendung: Vite, React 19, Tailwind 4 und shadcn/ui. Kein Server,
-kein Backend. Die Spiellogik in `lib/game.ts` ist frei von
+Reine Client-Anwendung: Vite, React 19 und handgeschriebenes SCSS. Kein
+Server, kein Backend, kein CSS-Framework. Die Oberfläche hat genau zwei
+Abhängigkeiten: React und die Icons von `lucide-react`. Die Spiellogik in `lib/game.ts` ist frei von
 Framework-Abhängigkeiten.
 
 Der Spielstand geht über `lib/storage.ts` — im Browser in den `localStorage`,
@@ -24,6 +25,13 @@ Arbeitsspeicher zurück; das Spiel läuft dann, überlebt aber die Sitzung nicht
 
 Schriften liegen im Bundle (`@fontsource`), nicht bei Google — sonst fehlen sie
 offline und jeder Aufruf meldet sich bei einem Dritten.
+
+## Styling
+
+Alle Stile liegen in `styles/` und werden über `styles/main.scss` gebündelt.
+Die Farb- und Schrift-Tokens stehen als CSS-Variablen in `styles/_tokens.scss`,
+damit sie auch aus berechneten Inline-Stilen heraus erreichbar sind. Die
+Klassennamen folgen BEM (`.toast`, `.toast__timer`, `.toast--warning`).
 
 ## Entwicklung
 
