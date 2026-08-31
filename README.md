@@ -14,8 +14,16 @@ Ein deutschsprachiges Casual-Idle-Spiel über den Aufbau eines Rasenpflegebetrie
 ## Technik
 
 Reine Client-Anwendung: Vite, React 19, Tailwind 4 und shadcn/ui. Kein Server,
-kein Backend — der Spielstand liegt im `localStorage`. Die Spiellogik in
-`lib/game.ts` ist frei von Framework-Abhängigkeiten.
+kein Backend. Die Spiellogik in `lib/game.ts` ist frei von
+Framework-Abhängigkeiten.
+
+Der Spielstand geht über `lib/storage.ts` — im Browser in den `localStorage`,
+in einer nativen Hülle später über `@capacitor/preferences`. Ist kein Speicher
+verfügbar (privater Modus, gesperrte Website-Daten), fällt die Ablage auf den
+Arbeitsspeicher zurück; das Spiel läuft dann, überlebt aber die Sitzung nicht.
+
+Schriften liegen im Bundle (`@fontsource`), nicht bei Google — sonst fehlen sie
+offline und jeder Aufruf meldet sich bei einem Dritten.
 
 ## Entwicklung
 

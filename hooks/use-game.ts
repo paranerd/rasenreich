@@ -18,6 +18,7 @@ import {
   unlockChemistry,
   unlockEquipment,
 } from '@/lib/game';
+import { getSaveStorage } from '@/lib/storage';
 
 const STORAGE_KEY = 'garden-grinder-save-v1';
 
@@ -35,26 +36,47 @@ export function useGame() {
   }, []);
 
   useEffect(() => {
-    let initial = createInitialState();
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as GameState;
-        if (parsed.version === 1) {
-          const result = simulateGame(parsed, Date.now(), true);
-          initial = result.state;
-          if (result.summary.elapsedMs >= 60_000) setOfflineSummary(result.summary);
+    // Das Laden ist asynchron, weil die native Ablage es ist. Der Abbruch
+    // verhindert, dass ein spaeter eintreffender Stand einen bereits
+    // ausgehaengten Betrieb ueberschreibt.
+    let cancelled = false;
+
+    const load = async () => {
+      let initial = createInitialState();
+      let summary: OfflineSummary | null = null;
+      let broken = false;
+
+      try {
+        const saved = await getSaveStorage().read(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as GameState;
+          if (parsed.version === 1) {
+            const result = simulateGame(parsed, Date.now(), true);
+            initial = result.state;
+            if (result.summary.elapsedMs >= 60_000) summary = result.summary;
+          }
         }
+      } catch {
+        broken = true;
       }
-    } catch {
-      showNotice('Der alte Spielstand war nicht lesbar. Ein neuer Betrieb wurde gestartet.');
-    }
-    setGame(initial);
+
+      if (cancelled) return;
+      if (broken) {
+        showNotice('Der alte Spielstand war nicht lesbar. Ein neuer Betrieb wurde gestartet.');
+      }
+      if (summary) setOfflineSummary(summary);
+      setGame(initial);
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [showNotice]);
 
   useEffect(() => {
     if (!game) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
+    void getSaveStorage().write(STORAGE_KEY, JSON.stringify(game));
   }, [game]);
 
   useEffect(() => {
@@ -119,7 +141,7 @@ export function useGame() {
         'Wirklich neu starten? Dein aktueller Betrieb und alle Fortschritte gehen verloren.',
       );
       if (!confirmed) return;
-      window.localStorage.removeItem(STORAGE_KEY);
+      void getSaveStorage().remove(STORAGE_KEY);
       setGame(createInitialState());
       setOfflineSummary(null);
       showNotice('Ein neuer Betrieb wurde gestartet.');
