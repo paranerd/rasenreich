@@ -301,13 +301,15 @@
     transform 0.06s;
   -webkit-tap-highlight-color: transparent;
 
-  /// Die laufende Aktion ist ausgenommen: ihr Hintergrund ist der Fortschritt.
-  &:hover:not(:disabled):not(.action--running) {
+  /// Ausgenommen sind die laufende Aktion — ihr Hintergrund ist der Fortschritt
+  /// — und die empfohlene, die schon grün gefüllt ist. Beide bringen ihren
+  /// eigenen Hover mit; ohne die Ausnahme gewinnt diese Regel über Spezifität.
+  &:hover:not(:disabled):not(.action--running):not(.action--on) {
     background: var(--highlight);
     border-color: var(--primary-line-strong);
   }
 
-  &:active:not(:disabled):not(.action--running) {
+  &:active:not(:disabled):not(.action--running):not(.action--on) {
     background: var(--highlight-hover);
   }
 
