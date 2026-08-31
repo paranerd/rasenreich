@@ -14,7 +14,6 @@ import {
   LayoutDashboard,
   LockKeyhole,
   RotateCcw,
-  Scissors,
   Settings2,
   ShoppingBag,
   Sparkles,
@@ -25,7 +24,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/button';
-import { Gauge } from '@/components/gauge';
+import { Gauge, metricToneColor } from '@/components/gauge';
 import { Toast, useGame } from '@/hooks/use-game';
 import {
   ACTION_LABELS,
@@ -122,9 +121,6 @@ function propertyFlags(property: GardenProperty) {
     flags.push({ id: 'broken', Icon: Wrench, tone: 'danger', label: 'Gerät ausgefallen' });
   } else if (property.condition < 45) {
     flags.push({ id: 'wear', Icon: Wrench, tone: 'warning', label: 'Wartung fällig' });
-  }
-  if (isDue(property)) {
-    flags.push({ id: 'due', Icon: Scissors, tone: 'good', label: 'Mähbereit' });
   }
   return flags;
 }
@@ -643,9 +639,15 @@ function PropertyRail({
                 </span>
               </span>
             </span>
-            <span className="rail__gauges" aria-hidden="true">
+            <span className="rail__dots" aria-hidden="true">
               {KINDS.map((kind) => (
-                <Gauge key={kind} kind={kind} value={propertyMetricPercent(property, kind)} variant="mini" />
+                <span
+                  key={kind}
+                  className="rail__dot"
+                  style={{
+                    background: metricToneColor(kind, propertyMetricPercent(property, kind)),
+                  }}
+                />
               ))}
             </span>
           </button>

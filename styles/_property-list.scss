@@ -187,13 +187,15 @@
   line-height: 1;
 }
 
-/// Drei Balken statt drei Kästchen: die Füllung zeigt den Wert selbst.
-.rail__gauges {
+/// Drei Kästchen für Rasenschnitt, Bewässerung und Wartung, in der Reihenfolge
+/// der Gauges auf der Detailseite. Die Farbe ist der Zustands-Ton, grün bis rot.
+.rail__dots {
   display: flex;
-  gap: 4px;
+  gap: 3px;
+}
 
-  .gauge--mini {
-    width: 26px;
-    height: 4px;
-  }
+.rail__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
 }

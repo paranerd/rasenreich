@@ -5,8 +5,10 @@ import { conditionHint, grassHint, moistureHint, TASK_LABELS, TaskKind } from '@
 export type GaugeVariant = 'bar' | 'ring' | 'mini';
 
 /**
- * Zustands-Ton auf der vereinheitlichten 0-100-%-Skala: je höher, desto besser.
- * Die Schwellen spiegeln die Hinweistexte aus lib/game.ts.
+ * Zustands-Ton auf der vereinheitlichten 0-100-%-Skala: grün ist gut, rot ist
+ * schlecht. Balken, Ringe und Kästchen tragen denselben Ton wie die Prozentzahl
+ * daneben — die Aufgabe erkennt man an Beschriftung und Position, nicht mehr an
+ * der Farbe. Die Schwellen spiegeln die Hinweistexte aus lib/game.ts.
  */
 function toneColor(kind: TaskKind, value: number) {
   if (kind === 'mow') {
@@ -20,8 +22,8 @@ function toneColor(kind: TaskKind, value: number) {
     if (value >= 25) return 'var(--tone-dry)';
     return 'var(--tone-bad)';
   }
-  if (value >= 75) return 'var(--tone-ok)';
-  if (value >= 20) return 'var(--tone-warn)';
+  if (value >= 70) return 'var(--tone-ok)';
+  if (value >= 45) return 'var(--tone-warn)';
   return 'var(--tone-bad)';
 }
 
@@ -62,11 +64,11 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
   if (variant === 'mini') {
     return (
       <div
-        className={`gauge gauge--mini kind--${kind} ${className ?? ''}`}
+        className={`gauge gauge--mini ${className ?? ''}`}
         title={`${text}: ${rounded} % — ${hint}`}
         {...meter}
       >
-        <div className="gauge__fill" style={{ width: `${fill}%` }} />
+        <div className="gauge__fill" style={{ width: `${fill}%`, background: tone }} />
       </div>
     );
   }
@@ -76,7 +78,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
     const circumference = 2 * Math.PI * 26;
     const arc = circumference * 0.75;
     return (
-      <div className={`gauge gauge--ring kind--${kind} ${className ?? ''}`} {...meter}>
+      <div className={`gauge gauge--ring ${className ?? ''}`} {...meter}>
         <div className="gauge__dial">
           <svg
             className="gauge__dial-svg"
@@ -99,7 +101,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
               cy="32"
               r="26"
               fill="none"
-              stroke="var(--kind)"
+              stroke={tone}
               strokeWidth="7"
               strokeLinecap="butt"
               strokeDasharray={`${(arc * fill) / 100} ${circumference}`}
@@ -118,7 +120,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
   }
 
   return (
-    <div className={`gauge kind--${kind} ${className ?? ''}`} title={hint} {...meter}>
+    <div className={`gauge ${className ?? ''}`} title={hint} {...meter}>
       <div className="gauge__head">
         <span className="gauge__label">{text}</span>
         <span className="gauge__value" style={{ color: tone }}>
@@ -126,7 +128,7 @@ export function Gauge({ kind, value, variant = 'bar', label, className }: GaugeP
         </span>
       </div>
       <div className="gauge__track">
-        <div className="gauge__fill" style={{ width: `${fill}%` }} />
+        <div className="gauge__fill" style={{ width: `${fill}%`, background: tone }} />
       </div>
     </div>
   );

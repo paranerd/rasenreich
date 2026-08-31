@@ -1,8 +1,9 @@
 @use 'mixins' as *;
 
-/// Die Füllung folgt `--kind` aus der Aufgaben-Klasse (siehe _status.scss).
-/// Der Balken endet bei 100 %, der abgelesene Wert nicht: Regen kann die
-/// Feuchtigkeit darüber treiben, und das soll sichtbar bleiben.
+/// Die Füllung trägt denselben Zustands-Ton wie die Prozentzahl daneben; die
+/// Farbe kommt deshalb aus der Komponente. Der Balken endet bei 100 %, der
+/// abgelesene Wert nicht: Regen kann die Feuchtigkeit darüber treiben, und das
+/// soll sichtbar bleiben.
 .gauge {
   display: flex;
   flex-direction: column;
@@ -41,7 +42,6 @@
   position: absolute;
   inset-block: 0;
   left: 0;
-  background: var(--kind);
   border-radius: 4px;
 }
 

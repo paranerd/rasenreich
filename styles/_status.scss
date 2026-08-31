@@ -1,18 +1,5 @@
 @use 'mixins' as *;
 
-/// Die Farbe je Aufgabe, einmal gesetzt und von Gauge und Kachelpunkten geteilt.
-.kind--mow {
-  --kind: var(--kind-grass);
-}
-
-.kind--water {
-  --kind: var(--kind-water);
-}
-
-.kind--maintain {
-  --kind: var(--kind-cond);
-}
-
 /// Statusfarben als Klassen statt als Nachschlagetabelle im Code.
 .tone--danger {
   --tone: var(--tone-bad);
