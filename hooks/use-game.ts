@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   acceptOffer,
+  cancelTask,
   createInitialState,
   declineOffer,
   GameResult,
@@ -143,6 +144,7 @@ export function useGame() {
     dismissOfflineSummary: () => setOfflineSummary(null),
     startTask: (propertyId: string, kind: TaskKind) =>
       run((current) => startTask(current, propertyId, kind)),
+    cancelTask: (propertyId: string) => run((current) => cancelTask(current, propertyId)),
     acceptOffer: (offerId: string) => run((current) => acceptOffer(current, offerId)),
     declineOffer: (offerId: string) => run((current) => declineOffer(current, offerId)),
     unlockEquipment: (kind: TaskKind) => run((current) => unlockEquipment(current, kind)),

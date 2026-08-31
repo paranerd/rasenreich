@@ -81,12 +81,18 @@ function recommendedTask(property: GardenProperty): TaskKind | undefined {
   return undefined;
 }
 
-/** Was der Schnitt jetzt einbringt, gemessen am bestmöglichen Ertrag. */
+/**
+ * Was der Schnitt einbringt, gemessen am bestmöglichen Ertrag. Während des
+ * Mähens zählt der Rasen vom Start — der Lohn wurde dort eingefroren, obwohl
+ * der Wert sichtbar mitläuft.
+ */
 function payoutHint(property: GardenProperty) {
-  const share = `${mowingPayoutShare(property)} %`;
-  if (property.grass > 100) return `${share} · überwachsen`;
-  if (property.grass > 80) return `${share} · zu lang`;
-  if (property.grass >= 60) return `${share} · im Fenster`;
+  const running = property.task?.kind === 'mow' ? property.task : undefined;
+  const grass = running?.startGrass ?? property.grass;
+  const share = `${mowingPayoutShare(property, grass)} %`;
+  if (grass > 100) return `${share} · überwachsen`;
+  if (grass > 80) return `${share} · zu lang`;
+  if (grass >= 60) return `${share} · im Fenster`;
   return `${share} · noch zu kurz`;
 }
 
@@ -716,11 +722,13 @@ function ActionButtons({
   property,
   manualBusy,
   onStart,
+  onCancel,
   compact = false,
 }: {
   property: GardenProperty;
   manualBusy: boolean;
   onStart: (kind: TaskKind) => void;
+  onCancel: () => void;
   compact?: boolean;
 }) {
   const recommended = recommendedTask(property);
@@ -734,8 +742,10 @@ function ActionButtons({
           ? Math.min(100, Math.max(0, ((Date.now() - running.startedAt) / (running.endsAt - running.startedAt)) * 100))
           : 0;
         const broken = isBroken(property, kind);
-        const disabled = Boolean(property.task) || (!automatic && manualBusy) || broken;
-        const on = kind === recommended && !disabled;
+        // Die laufende Aufgabe bleibt bedienbar — ein Klick bricht sie ab.
+        const disabled = !running && (Boolean(property.task) || (!automatic && manualBusy) || broken);
+        // Die laufende Aktion traegt ihre eigene Darstellung, nicht die der Empfehlung.
+        const on = kind === recommended && !disabled && !running;
         const duration = formatDuration(taskDuration(property, kind) * 1_000);
         const meta =
           kind === 'mow'
@@ -752,23 +762,32 @@ function ActionButtons({
               running ? 'action--running' : ''
             } ${broken ? 'action--broken' : ''}`}
             disabled={disabled}
-            onClick={() => onStart(kind)}
+            title={running ? `${ACTION_LABELS[kind]} abbrechen` : undefined}
+            onClick={() => (running ? onCancel() : onStart(kind))}
           >
+            {running && (
+              // Zählt rückwärts: die gefüllte Fläche ist die verbleibende Arbeit.
+              <span
+                className="action__progress"
+                style={{ width: `${100 - progress}%` }}
+                aria-hidden="true"
+              />
+            )}
             <span className="action__label">
-              {compact && running
-                ? formatDuration(running.endsAt - Date.now())
-                : compact && broken
-                  ? 'Defekt'
-                  : ACTION_LABELS[kind]}
+              {running ? (
+                <>
+                  <X className="action__cancel" aria-hidden="true" />
+                  {compact ? formatDuration(running.endsAt - Date.now()) : 'Abbrechen'}
+                </>
+              ) : compact && broken ? (
+                'Defekt'
+              ) : (
+                ACTION_LABELS[kind]
+              )}
             </span>
             {!compact && (
               <span className="action__meta">
                 {running ? formatDuration(running.endsAt - Date.now()) : broken ? 'Defekt' : meta}
-              </span>
-            )}
-            {running && (
-              <span className="action__track" aria-hidden="true">
-                <span className="action__progress" style={{ width: `${progress}%` }} />
               </span>
             )}
           </button>
@@ -870,6 +889,7 @@ function PropertyDetail({
   property,
   manualBusy,
   onStart,
+  onCancel,
   onUnlock,
   onInstall,
 }: {
@@ -877,6 +897,7 @@ function PropertyDetail({
   property: GardenProperty;
   manualBusy: boolean;
   onStart: (kind: TaskKind) => void;
+  onCancel: () => void;
   onUnlock: (kind: TaskKind) => void;
   onInstall: (kind: TaskKind) => void;
 }) {
@@ -916,7 +937,12 @@ function PropertyDetail({
 
         <div className="panel__section panel__section--divided">
           <SectionLabel trailing={payoutHint(property)}>Aktion</SectionLabel>
-          <ActionButtons property={property} manualBusy={manualBusy} onStart={onStart} />
+          <ActionButtons
+            property={property}
+            manualBusy={manualBusy}
+            onStart={onStart}
+            onCancel={onCancel}
+          />
         </div>
 
         <div className="panel__section panel__section--divided">
@@ -936,6 +962,7 @@ function MobileOverview({
   onFilter,
   onOpen,
   onStart,
+  onCancel,
 }: {
   properties: GardenProperty[];
   manualBusy: boolean;
@@ -943,6 +970,7 @@ function MobileOverview({
   onFilter: (id: FilterId) => void;
   onOpen: (id: string) => void;
   onStart: (id: string, kind: TaskKind) => void;
+  onCancel: (id: string) => void;
 }) {
   const match = FILTERS.find((entry) => entry.id === filter)?.match ?? (() => true);
   const visible = properties.filter(match);
@@ -996,6 +1024,7 @@ function MobileOverview({
                   property={property}
                   manualBusy={manualBusy}
                   onStart={(kind) => onStart(property.id, kind)}
+                  onCancel={() => onCancel(property.id)}
                   compact
                 />
               </div>
@@ -1244,6 +1273,7 @@ export default function Home() {
     offlineSummary,
     dismissOfflineSummary,
     startTask,
+    cancelTask,
     acceptOffer,
     declineOffer,
     unlockEquipment,
@@ -1352,6 +1382,7 @@ export default function Home() {
                   property={selected}
                   manualBusy={manualBusy}
                   onStart={(kind) => startTask(selected.id, kind)}
+                  onCancel={() => cancelTask(selected.id)}
                   onUnlock={unlockEquipment}
                   onInstall={(kind) => installEquipment(selected.id, kind)}
                 />
@@ -1366,6 +1397,7 @@ export default function Home() {
                     property={selected}
                     manualBusy={manualBusy}
                     onStart={(kind) => startTask(selected.id, kind)}
+                    onCancel={() => cancelTask(selected.id)}
                     onUnlock={unlockEquipment}
                     onInstall={(kind) => installEquipment(selected.id, kind)}
                   />
@@ -1378,6 +1410,7 @@ export default function Home() {
                   onFilter={setFilter}
                   onOpen={openProperty}
                   onStart={startTask}
+                  onCancel={cancelTask}
                 />
               )}
             </>

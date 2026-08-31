@@ -314,11 +314,11 @@
   font-weight: 600;
 }
 
-/// Die laufende Aktion bleibt gesperrt, hebt sich aber vom stumpfen Grau der
-/// übrigen gesperrten Schaltflächen ab und trägt ihren Fortschritt selbst.
-.action--running:disabled {
+/// Die laufende Aktion bleibt bedienbar — ein Klick bricht sie ab — und trägt
+/// ihren Fortschritt als Fläche, die über die Laufzeit leerläuft.
+.action--running {
   color: var(--primary);
-  background: var(--secondary);
+  background: var(--paper);
   border-color: var(--primary-line-strong);
 }
 
@@ -337,6 +337,10 @@
 }
 
 .action__label {
+  position: relative;
+  display: flex;
+  gap: 5px;
+  align-items: center;
   white-space: nowrap;
 
   .action:not(.action--compact) & {
@@ -349,6 +353,7 @@
 .action__meta {
   @include num;
 
+  position: relative;
   font-size: 9.5px;
   font-weight: 500;
   line-height: 1;
@@ -372,19 +377,18 @@
   }
 }
 
-.action__track {
+/// Vollflächig und rückwärts: die gefüllte Breite ist die verbleibende Arbeit.
+.action__progress {
   position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: 3px;
-  background: var(--track);
+  inset-block: 0;
+  left: 0;
+  background: var(--secondary);
+  transition: width 1s linear;
 }
 
-.action__progress {
-  display: block;
-  height: 100%;
-  background: var(--primary);
-  transition: width 1s linear;
+.action__cancel {
+  width: 12px;
+  height: 12px;
 }
 
 // ------------------------------------------------------------------ Upgrades

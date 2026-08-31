@@ -15,6 +15,13 @@ export interface EquipmentLevel {
   description: string;
 }
 
+/** Was eine Aufgabe über ihre gesamte Laufzeit an den Werten verändert. */
+export interface TaskEffect {
+  grass?: number;
+  moisture?: number;
+  condition?: number;
+}
+
 export interface PropertyTask {
   kind: TaskKind;
   startedAt: number;
@@ -24,6 +31,12 @@ export interface PropertyTask {
   cost: number;
   payoutTotal?: number;
   payoutAccrued?: number;
+  /** Zustand vor der Arbeit — die Bewertung am Ende hängt daran, nicht am Endwert. */
+  startGrass?: number;
+  startMoisture?: number;
+  effect?: TaskEffect;
+  /** Anteil der Wirkung, der bereits eingeflossen ist (0 bis 1). */
+  effectProgress?: number;
 }
 
 export interface GardenProperty {
@@ -82,7 +95,7 @@ export interface GameLog {
   tone: 'good' | 'neutral' | 'warning';
 }
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface GameState {
   version: number;
@@ -409,10 +422,11 @@ export function maintenanceCost(property: GardenProperty) {
   );
 }
 
-export function mowingPayout(property: GardenProperty) {
+/** `grass` ist übergebbar, weil der Lohn beim Start eingefroren wird. */
+export function mowingPayout(property: GardenProperty, grass = property.grass) {
   const qualityBase = property.weedControl ? 1.08 : 1;
-  if (property.grass < 60) return Math.round(property.payout * (property.grass / 60) * qualityBase);
-  if (property.grass <= 80) return Math.round(property.payout * 1.2 * qualityBase);
+  if (grass < 60) return Math.round(property.payout * (grass / 60) * qualityBase);
+  if (grass <= 80) return Math.round(property.payout * 1.2 * qualityBase);
   return Math.round(property.payout * qualityBase);
 }
 
@@ -433,9 +447,9 @@ export function taskPayout(property: GardenProperty, kind: TaskKind) {
  * Anteil am bestmöglichen Schnitt-Ertrag in Prozent. Die Anzeige spricht damit
  * dieselbe Sprache wie die Gauges: 100 % ist optimal, 0 % ist schlecht.
  */
-export function mowingPayoutShare(property: GardenProperty) {
+export function mowingPayoutShare(property: GardenProperty, grass = property.grass) {
   const optimum = property.payout * 1.2 * (property.weedControl ? 1.08 : 1);
-  return Math.round((mowingPayout(property) / optimum) * 100);
+  return Math.round((mowingPayout(property, grass) / optimum) * 100);
 }
 
 export function isAutomated(property: GardenProperty, kind: TaskKind) {
@@ -456,25 +470,86 @@ function rollFailure(state: GameState, property: GardenProperty, kind: TaskKind,
   );
 }
 
+/** Verschleiß eines Mähvorgangs — nasser und langer Rasen kostet mehr. */
+function mowingWear(property: GardenProperty) {
+  const wetFactor = property.moisture > 100 ? 2 : 1;
+  const longFactor = property.grass > 100 ? 2.2 : property.grass > 80 ? 1.45 : 1;
+  return 3.2 * Math.pow(property.size / 120, 0.3) * wetFactor * longFactor;
+}
+
+/**
+ * Die volle Wirkung einer Aufgabe, festgelegt beim Start. Sie fließt über die
+ * Laufzeit anteilig ein, damit die Werte während der Arbeit mitlaufen und ein
+ * Abbruch die halbe Arbeit behält.
+ */
+function taskEffect(property: GardenProperty, kind: TaskKind): TaskEffect {
+  if (kind === 'mow') {
+    return {
+      grass: -Math.max(0, property.grass - Math.max(12, property.grass - 66)),
+      condition: -mowingWear(property),
+    };
+  }
+  if (kind === 'water') {
+    return { moisture: Math.max(0, 100 - property.moisture), condition: -0.8 };
+  }
+  return { condition: 58 + property.equipment.maintain * 12 };
+}
+
+function createTask(
+  property: GardenProperty,
+  kind: TaskKind,
+  at: number,
+  automated: boolean,
+  blocksPlayer: boolean,
+  cost: number,
+): PropertyTask {
+  return {
+    kind,
+    startedAt: at,
+    endsAt: at + taskDuration(property, kind) * 1_000,
+    automated,
+    blocksPlayer,
+    cost,
+    payoutTotal: kind === 'maintain' ? undefined : taskPayout(property, kind),
+    payoutAccrued: 0,
+    startGrass: property.grass,
+    startMoisture: property.moisture,
+    effect: taskEffect(property, kind),
+    effectProgress: 0,
+  };
+}
+
+/** Lässt die Werte während der Arbeit mitlaufen, statt erst am Ende zu springen. */
+function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
+  const task = property.task;
+  if (!task?.effect) return;
+  const duration = Math.max(1, task.endsAt - task.startedAt);
+  const progress = clamp((Math.min(intervalEnd, task.endsAt) - task.startedAt) / duration, 0, 1);
+  const step = progress - (task.effectProgress ?? 0);
+  if (step <= 0) return;
+
+  task.effectProgress = progress;
+  const { grass, moisture, condition } = task.effect;
+  if (grass) property.grass = clamp(property.grass + grass * step, 0, 150);
+  if (moisture) property.moisture = clamp(property.moisture + moisture * step, 0, 150);
+  if (condition) property.condition = clamp(property.condition + condition * step);
+}
+
 function completeTask(state: GameState, property: GardenProperty, at: number) {
   const task = property.task;
   if (!task) return;
 
   if (task.kind === 'mow') {
-    const grassBefore = property.grass;
+    // Der Rasen ist bereits geschnitten; bewertet wird der Zustand von vorher.
+    const grassBefore = task.startGrass ?? property.grass;
     const payout = task.payoutTotal ?? mowingPayout(property);
     const remainingPayout = Math.max(0, payout - (task.payoutAccrued ?? 0));
-    const wetFactor = property.moisture > 100 ? 2 : 1;
-    const longFactor = grassBefore > 100 ? 2.2 : grassBefore > 80 ? 1.45 : 1;
-    const wear = 3.2 * Math.pow(property.size / 120, 0.3) * wetFactor * longFactor;
 
     state.money += remainingPayout;
     state.lifetimeRevenue += remainingPayout;
     state.sessionRevenue += remainingPayout;
     property.lifetimeRevenue += remainingPayout;
     property.completedJobs += 1;
-    property.grass = Math.max(12, grassBefore - 66);
-    property.condition = clamp(property.condition - wear);
 
     rollFailure(state, property, 'mow', at);
 
@@ -500,7 +575,7 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
   }
 
   if (task.kind === 'water') {
-    const before = property.moisture;
+    const before = task.startMoisture ?? property.moisture;
     const payout = task.payoutTotal ?? wateringPayout(property);
     const remainingPayout = Math.max(0, payout - (task.payoutAccrued ?? 0));
 
@@ -508,8 +583,6 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     state.lifetimeRevenue += remainingPayout;
     state.sessionRevenue += remainingPayout;
     property.lifetimeRevenue += remainingPayout;
-    property.moisture = 100;
-    property.condition = clamp(property.condition - 0.8);
     if (before < 50) property.satisfaction = clamp(property.satisfaction + 2);
     rollFailure(state, property, 'water', at);
     addLog(
@@ -521,9 +594,7 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
   }
 
   if (task.kind === 'maintain') {
-    const level = property.equipment.maintain;
     const repaired = brokenCount(property);
-    property.condition = clamp(property.condition + 58 + level * 12);
     property.broken = { mow: false, water: false };
     addLog(
       state,
@@ -571,16 +642,7 @@ function startAutomatedTask(state: GameState, property: GardenProperty, kind: Ta
   const cost = kind === 'maintain' ? maintenanceCost(property) : 0;
   if (cost > state.money) return;
   state.money -= cost;
-  property.task = {
-    kind,
-    startedAt: at,
-    endsAt: at + taskDuration(property, kind) * 1_000,
-    automated: true,
-    blocksPlayer: false,
-    cost,
-    payoutTotal: kind === 'maintain' ? undefined : taskPayout(property, kind),
-    payoutAccrued: 0,
-  };
+  property.task = createTask(property, kind, at, true, false, cost);
 }
 
 function tryAutomation(state: GameState, property: GardenProperty, at: number) {
@@ -722,10 +784,18 @@ function triggerEvent(state: GameState, now: number) {
  */
 export function migrateState(raw: GameState): GameState | undefined {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.properties)) return undefined;
-  if (raw.version !== 1 && raw.version !== SAVE_VERSION) return undefined;
+  if (![1, 2, SAVE_VERSION].includes(raw.version)) return undefined;
   const state = clone(raw);
   state.properties.forEach((property) => {
     property.broken ??= { mow: property.condition <= 0, water: property.condition <= 0 };
+    // Vor Version 3 sprangen die Werte erst am Ende; laufende Aufgaben
+    // bekommen ihre Wirkung nachtraeglich und tragen sie ueber die Restzeit ab.
+    if (property.task) {
+      property.task.startGrass ??= property.grass;
+      property.task.startMoisture ??= property.moisture;
+      property.task.effect ??= taskEffect(property, property.task.kind);
+      property.task.effectProgress ??= 0;
+    }
   });
   state.version = SAVE_VERSION;
   return state;
@@ -747,6 +817,7 @@ export function simulateGame(source: GameState, now = Date.now(), offline = fals
 
     state.properties.forEach((property) => {
       accrueTaskRevenue(state, property, cursor, stepEnd);
+      accrueTaskEffect(property, stepEnd);
       advanceNaturalState(state, property, seconds);
       if (property.task && property.task.endsAt <= stepEnd) completeTask(state, property, property.task.endsAt);
       tryAutomation(state, property, stepEnd);
@@ -824,21 +895,34 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
   const cost = kind === 'maintain' ? maintenanceCost(property) : 0;
   if (state.money < cost) return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   state.money -= cost;
-  const duration = taskDuration(property, kind);
-  property.task = {
-    kind,
-    startedAt: Date.now(),
-    endsAt: Date.now() + duration * 1_000,
-    automated,
-    blocksPlayer,
-    cost,
-    payoutTotal: kind === 'maintain' ? undefined : taskPayout(property, kind),
-    payoutAccrued: 0,
-  };
+  property.task = createTask(property, kind, Date.now(), automated, blocksPlayer, cost);
   addLog(state, `${property.name}: ${TASK_LABELS[kind]} gestartet.`, 'neutral');
+  return { state };
+}
+
+/**
+ * Bricht die laufende Aufgabe ab. Die bis dahin geleistete Arbeit und der
+ * anteilige Lohn bleiben; erstattet wird nur der noch nicht gearbeitete Teil
+ * der Vorkasse. Die Boni am Ende — Zufriedenheit und Reputation — verfallen.
+ */
+export function cancelTask(source: GameState, propertyId: string): GameResult {
+  const state = clone(source);
+  const property = state.properties.find((item) => item.id === propertyId);
+  if (!property?.task) return { state, message: 'Hier läuft gerade keine Aufgabe.' };
+
+  const task = property.task;
+  const progress = clamp(
+    (Date.now() - task.startedAt) / Math.max(1, task.endsAt - task.startedAt),
+    0,
+    1,
+  );
+  const refund = Math.round(task.cost * (1 - progress));
+  state.money += refund;
+  property.task = undefined;
+  addLog(state, `${property.name}: ${TASK_LABELS[task.kind]} abgebrochen.`, 'warning');
   return {
     state,
-    message: `${TASK_LABELS[kind]} läuft · ${formatDuration(duration * 1_000)}`,
+    message: refund > 0 ? `Abgebrochen · ${formatMoney(refund)} zurück.` : 'Aufgabe abgebrochen.',
   };
 }
 
@@ -969,8 +1053,8 @@ export function resolveEvent(source: GameState): GameResult {
     state.reputation += 0.5;
   }
   state.activeEvent = undefined;
-  // Ein blosses Wegklicken braucht keine Rueckmeldung — nur eine echte Handlung.
-  return { state, message: event.actionLabel ? 'Ereignis erfolgreich gelöst.' : undefined };
+  // Das Ereignis verschwindet sichtbar — eine zusaetzliche Meldung waere Laerm.
+  return { state };
 }
 
 export function nextUnlockReputation(reputation: number) {
