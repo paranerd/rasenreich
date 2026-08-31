@@ -467,10 +467,16 @@ export function taskWorkWindow(task: PropertyTask) {
   return { from: task.workStartsAt ?? task.startedAt, to: task.workEndsAt ?? task.endsAt };
 }
 
+/**
+ * Die Uhr läuft flüssig, simuliert wird aber im Takt. Der Abschluss beginnt
+ * deshalb erst, wenn die Wirkung auch wirklich verbucht ist — sonst stünde
+ * „Abschluss" schon da, während der letzte Takt den Wert noch anhebt.
+ */
 export function taskPhase(task: PropertyTask, now = Date.now()): TaskPhase {
   const { from, to } = taskWorkWindow(task);
   if (now < from) return 'setup';
   if (now < to) return 'work';
+  if (!task.cancelled && (task.effectProgress ?? 1) < 1) return 'work';
   return 'wrapup';
 }
 
@@ -898,6 +904,26 @@ export function migrateState(raw: GameState): GameState | undefined {
   return state;
 }
 
+/**
+ * Ende des nächsten Simulationsschritts. Der Schritt endet spätestens nach 30
+ * Sekunden, bricht aber genau auf jeder Phasengrenze ab: nur so ist die
+ * Wirkung einer Aufgabe exakt am Ende der Arbeit vollständig und rückt nicht
+ * erst im Abschluss nach. Vorbereiten und Abschließen ändern den Zustand damit
+ * nachweislich nicht.
+ */
+function nextStepEnd(state: GameState, cursor: number, now: number) {
+  let stepEnd = Math.min(now, cursor + 30_000);
+  state.properties.forEach((property) => {
+    const task = property.task;
+    if (!task) return;
+    const { from, to } = taskWorkWindow(task);
+    for (const boundary of [from, to, task.endsAt]) {
+      if (boundary > cursor && boundary < stepEnd) stepEnd = boundary;
+    }
+  });
+  return stepEnd;
+}
+
 export function simulateGame(source: GameState, now = Date.now(), offline = false) {
   const state = clone(source);
   state.money = Math.round(state.money);
@@ -907,7 +933,7 @@ export function simulateGame(source: GameState, now = Date.now(), offline = fals
   let cursor = state.lastUpdatedAt;
 
   while (cursor < now) {
-    const stepEnd = Math.min(now, cursor + 30_000);
+    const stepEnd = nextStepEnd(state, cursor, now);
     const seconds = (stepEnd - cursor) / 1_000;
 
     if (state.weather !== 'mild' && stepEnd >= state.weatherUntil) state.weather = 'mild';

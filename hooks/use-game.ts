@@ -35,6 +35,14 @@ export interface Toast {
 const TOAST_DURATION = 4_000;
 const MAX_TOASTS = 3;
 
+/**
+ * Der Simulationstakt. Fein genug, dass die Werte während einer Aufgabe
+ * fließen statt zu springen, und dass eine Phasengrenze auf den Frame genau
+ * sichtbar wird. Gespeichert wird bewusst seltener.
+ */
+const TICK_MS = 200;
+const SAVE_INTERVAL_MS = 1_000;
+
 export function useGame() {
   const [game, setGame] = useState<GameState | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -91,15 +99,45 @@ export function useGame() {
     };
   }, [showToast]);
 
+  // Der Takt läuft fünfmal je Sekunde, geschrieben wird höchstens einmal —
+  // localStorage ist synchron und hat im Spieltakt nichts zu suchen.
+  const pendingSave = useRef<GameState | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushSave = useCallback(() => {
+    const snapshot = pendingSave.current;
+    if (!snapshot) return;
+    pendingSave.current = null;
+    void getSaveStorage().write(STORAGE_KEY, JSON.stringify(snapshot));
+  }, []);
+
   useEffect(() => {
     if (!game) return;
-    void getSaveStorage().write(STORAGE_KEY, JSON.stringify(game));
-  }, [game]);
+    pendingSave.current = game;
+    if (saveTimer.current) return;
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      flushSave();
+    }, SAVE_INTERVAL_MS);
+  }, [game, flushSave]);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushSave();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', flushSave);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', flushSave);
+      flushSave();
+    };
+  }, [flushSave]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setGame((current) => (current ? simulateGame(current).state : current));
-    }, 1_000);
+    }, TICK_MS);
     return () => window.clearInterval(timer);
   }, []);
 
