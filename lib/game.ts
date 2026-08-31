@@ -366,6 +366,19 @@ export function mowingPayout(property: GardenProperty) {
   return Math.round(property.payout * qualityBase);
 }
 
+/** Bewaessern ist bezahlte Arbeitszeit — der Lohn steigt mit dem tatsaechlichen Wasserbedarf. */
+export function wateringPayout(property: GardenProperty) {
+  const deficit = Math.max(0, 100 - property.moisture);
+  return Math.round(property.payout * 0.6 * Math.min(1, deficit / 60));
+}
+
+/** Ertrag einer Aufgabe — Wartung kostet, statt zu zahlen. */
+export function taskPayout(property: GardenProperty, kind: TaskKind) {
+  if (kind === 'mow') return mowingPayout(property);
+  if (kind === 'water') return wateringPayout(property);
+  return 0;
+}
+
 export function isAutomated(property: GardenProperty, kind: TaskKind) {
   return Boolean(EQUIPMENT[kind][property.equipment[kind]].automated);
 }
@@ -419,10 +432,22 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
 
   if (task.kind === 'water') {
     const before = property.moisture;
+    const payout = task.payoutTotal ?? wateringPayout(property);
+    const remainingPayout = Math.max(0, payout - (task.payoutAccrued ?? 0));
+
+    state.money += remainingPayout;
+    state.lifetimeRevenue += remainingPayout;
+    state.sessionRevenue += remainingPayout;
+    property.lifetimeRevenue += remainingPayout;
     property.moisture = 100;
     property.condition = clamp(property.condition - 0.8);
     if (before < 50) property.satisfaction = clamp(property.satisfaction + 2);
-    addLog(state, `${property.name}: Bewässerung abgeschlossen.`, 'neutral', at);
+    addLog(
+      state,
+      `${property.name}: Bewässerung abgeschlossen, ${formatMoney(payout)} verdient.`,
+      'neutral',
+      at,
+    );
   }
 
   if (task.kind === 'maintain') {
@@ -435,16 +460,16 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
   if (property.satisfaction > 20) property.rescueUntil = undefined;
 }
 
-function accrueMowingRevenue(
+function accrueTaskRevenue(
   state: GameState,
   property: GardenProperty,
   intervalStart: number,
   intervalEnd: number,
 ) {
   const task = property.task;
-  if (!task || task.kind !== 'mow') return;
+  if (!task || task.kind === 'maintain') return;
 
-  const payoutTotal = task.payoutTotal ?? mowingPayout(property);
+  const payoutTotal = task.payoutTotal ?? taskPayout(property, task.kind);
   const duration = Math.max(1, task.endsAt - task.startedAt);
   const effectiveEnd = Math.min(intervalEnd, task.endsAt);
   const elapsed = clamp((effectiveEnd - task.startedAt) / duration, 0, 1);
@@ -474,7 +499,7 @@ function startAutomatedTask(state: GameState, property: GardenProperty, kind: Ta
     automated: true,
     blocksPlayer: false,
     cost,
-    payoutTotal: kind === 'mow' ? mowingPayout(property) : undefined,
+    payoutTotal: kind === 'maintain' ? undefined : taskPayout(property, kind),
     payoutAccrued: 0,
   };
 }
@@ -628,7 +653,7 @@ export function simulateGame(source: GameState, now = Date.now(), offline = fals
     if (state.weather !== 'mild' && stepEnd >= state.weatherUntil) state.weather = 'mild';
 
     state.properties.forEach((property) => {
-      accrueMowingRevenue(state, property, cursor, stepEnd);
+      accrueTaskRevenue(state, property, cursor, stepEnd);
       advanceNaturalState(state, property, seconds);
       if (property.task && property.task.endsAt <= stepEnd) completeTask(state, property, property.task.endsAt);
       tryAutomation(state, property, stepEnd);
@@ -713,7 +738,7 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
     automated,
     blocksPlayer,
     cost,
-    payoutTotal: kind === 'mow' ? mowingPayout(property) : undefined,
+    payoutTotal: kind === 'maintain' ? undefined : taskPayout(property, kind),
     payoutAccrued: 0,
   };
   addLog(state, `${property.name}: ${TASK_LABELS[kind]} gestartet.`, 'neutral');
@@ -910,10 +935,9 @@ export function formatMoney(value: number) {
 
 export function formatDuration(milliseconds: number) {
   const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1_000));
-  if (totalSeconds < 60) return `${totalSeconds} Sek.`;
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return seconds ? `${minutes}:${seconds.toString().padStart(2, '0')} Min.` : `${minutes} Min.`;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 export function humanOfflineDuration(milliseconds: number) {

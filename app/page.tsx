@@ -44,6 +44,7 @@ import {
   taskDuration,
   TaskKind,
   ViewName,
+  wateringPayout,
 } from '@/lib/game';
 
 const KINDS: TaskKind[] = ['mow', 'water', 'maintain'];
@@ -210,7 +211,7 @@ function AppHeader({
   return (
     <header className="hidden shrink-0 border-b border-border bg-paper lg:block">
       {/* Drei Spalten, damit das Vermögen unabhängig von den Seiten mittig steht */}
-      <div className="mx-auto grid max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-4 px-5 py-2.5">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-[26px] py-2.5">
         <button
           className="flex w-fit items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           onClick={onHome}
@@ -330,18 +331,25 @@ function SideNav({
   );
 }
 
-/** Mobiler Kopf aus Entwurf 2a: Vermögen als größte Zahl, darunter der Ruf. */
+/** Mobiler Kopf aus Entwurf 2a: Vermögen als größte Zahl, darunter Aktivität und Ruf. */
 function MobileHeader({
   money,
   reputation,
   weather,
+  activeProperty,
+  onActiveProperty,
   onBack,
 }: {
   money: number;
   reputation: number;
   weather: 'mild' | 'heat' | 'rain';
+  activeProperty?: GardenProperty;
+  onActiveProperty: () => void;
   onBack?: () => void;
 }) {
+  const task = activeProperty?.task;
+  const busy = Boolean(task);
+
   return (
     <header className="relative flex min-h-[96px] shrink-0 flex-col items-center justify-center gap-[7px] border-b border-border bg-paper px-4 py-3 lg:hidden">
       {onBack ? (
@@ -370,38 +378,32 @@ function MobileHeader({
         <span className="font-mono text-[17px] font-semibold leading-none text-ink-soft">€</span>
       </span>
 
+      <button
+        type="button"
+        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors disabled:cursor-default"
+        disabled={!busy}
+        onClick={onActiveProperty}
+        title={busy ? `Zu ${activeProperty?.name} springen` : 'Kein Grundstück in Arbeit'}
+      >
+        <span
+          className={`size-2 shrink-0 rounded-full ${busy ? 'rr-pulse' : ''}`}
+          style={{ background: busy ? '#4f7a2f' : '#a8b394' }}
+          aria-hidden="true"
+        />
+        <span className="whitespace-nowrap text-[11.5px] font-semibold leading-none text-ink-soft">
+          {busy ? 'Beschäftigt' : 'Verfügbar'}
+        </span>
+        {task && (
+          <span className="whitespace-nowrap font-mono text-[11.5px] font-semibold leading-none text-ink-soft tabular-nums">
+            {formatDuration(task.endsAt - Date.now())}
+          </span>
+        )}
+      </button>
+
       <span className="absolute bottom-3 right-4">
         <ReputationRing reputation={reputation} />
       </span>
     </header>
-  );
-}
-
-/** Laufband über der Kartenliste, sobald irgendwo gearbeitet wird. */
-function BusyBanner({ property, onOpen }: { property: GardenProperty; onOpen: () => void }) {
-  const task = property.task;
-  if (!task) return null;
-  return (
-    <div
-      className="flex shrink-0 items-center gap-2.5 border-b py-1.5 pl-4 pr-2.5 lg:hidden"
-      style={{ background: '#e8efdf', borderColor: 'rgba(79,122,47,.25)' }}
-    >
-      <span className="rr-pulse size-2 shrink-0 rounded-full" style={{ background: '#4f7a2f' }} aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate text-xs font-semibold leading-none text-ink">
-        {ACTION_LABELS[task.kind]} · {property.name}
-      </span>
-      <span className="font-mono text-xs font-semibold leading-none" style={{ color: '#3f6b28' }}>
-        {formatDuration(task.endsAt - Date.now())}
-      </span>
-      <button
-        type="button"
-        className="flex min-h-11 shrink-0 items-center rounded-lg border bg-paper px-3.5 text-xs font-semibold"
-        style={{ borderColor: 'rgba(63,107,40,.45)', color: '#3f6b28' }}
-        onClick={onOpen}
-      >
-        Ansehen
-      </button>
-    </div>
   );
 }
 
@@ -715,9 +717,9 @@ function ActionButtons({
         const meta =
           kind === 'mow'
             ? `+${formatMoney(mowingPayout(property))} · ${duration}`
-            : kind === 'maintain'
-              ? `−${formatMoney(maintenanceCost(property))} · ${duration}`
-              : duration;
+            : kind === 'water'
+              ? `+${formatMoney(wateringPayout(property))} · ${duration}`
+              : `−${formatMoney(maintenanceCost(property))} · ${duration}`;
 
         return (
           <button
@@ -1383,6 +1385,8 @@ export default function Home() {
         money={game.money}
         reputation={game.reputation}
         weather={game.weather}
+        activeProperty={activeProperty}
+        onActiveProperty={jumpToActive}
         onBack={view === 'overview' && mobileDetail ? () => setMobileDetail(false) : undefined}
       />
 
@@ -1398,10 +1402,6 @@ export default function Home() {
             </Button>
           </div>
         </div>
-      )}
-
-      {view === 'overview' && !mobileDetail && activeProperty && (
-        <BusyBanner property={activeProperty} onOpen={jumpToActive} />
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -1457,8 +1457,10 @@ export default function Home() {
             <OffersView
               game={game}
               onAccept={(id) => {
+                // Bei mehreren Angeboten bleibt die Liste stehen, damit weiter geprüft werden kann.
+                const wasLastOffer = game.offers.length <= 1;
                 acceptOffer(id);
-                setView('overview');
+                if (wasLastOffer) setView('overview');
               }}
               onDecline={declineOffer}
             />
