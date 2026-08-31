@@ -22,9 +22,17 @@ export interface TaskEffect {
   condition?: number;
 }
 
+export type TaskPhase = 'setup' | 'work' | 'wrapup';
+
 export interface PropertyTask {
   kind: TaskKind;
+  /** Beginn des Rüstens. */
   startedAt: number;
+  /** Beginn der eigentlichen Arbeit — vorher wird gerüstet. */
+  workStartsAt?: number;
+  /** Ende der Arbeit — danach wird abgeschlossen. */
+  workEndsAt?: number;
+  /** Fertig, inklusive Abschluss. */
   endsAt: number;
   automated: boolean;
   blocksPlayer: boolean;
@@ -95,7 +103,8 @@ export interface GameLog {
   tone: 'good' | 'neutral' | 'warning';
 }
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
+const SUPPORTED_VERSIONS = [1, 2, 3, SAVE_VERSION];
 
 export interface GameState {
   version: number;
@@ -395,6 +404,43 @@ export function partsCost(property: GardenProperty, kind: BreakableKind) {
   return Math.round(PARTS_BASE[kind] * Math.pow(property.size / 120, 0.4));
 }
 
+/**
+ * Rüst- und Abschlusszeiten bleiben konstant: sie hängen weder an der Fläche
+ * noch am Gerät. Genau das macht große Grundstücke lohnender als viele kleine.
+ * Automatik rüstet nicht — der Roboter fährt einfach los.
+ */
+const SETUP_SECONDS: Record<TaskKind, number> = { mow: 6, water: 5, maintain: 8 };
+const WRAPUP_SECONDS: Record<TaskKind, number> = { mow: 5, water: 4, maintain: 6 };
+
+export function taskSetupDuration(property: GardenProperty, kind: TaskKind) {
+  return isAutomated(property, kind) ? 0 : SETUP_SECONDS[kind];
+}
+
+export function taskWrapUpDuration(property: GardenProperty, kind: TaskKind) {
+  return isAutomated(property, kind) ? 0 : WRAPUP_SECONDS[kind];
+}
+
+/** Rüsten, Arbeiten und Abschließen zusammen — was in der Anzeige steht. */
+export function taskTotalDuration(property: GardenProperty, kind: TaskKind) {
+  return (
+    taskSetupDuration(property, kind) +
+    taskDuration(property, kind) +
+    taskWrapUpDuration(property, kind)
+  );
+}
+
+export function taskWorkWindow(task: PropertyTask) {
+  return { from: task.workStartsAt ?? task.startedAt, to: task.workEndsAt ?? task.endsAt };
+}
+
+export function taskPhase(task: PropertyTask, now = Date.now()): TaskPhase {
+  const { from, to } = taskWorkWindow(task);
+  if (now < from) return 'setup';
+  if (now < to) return 'work';
+  return 'wrapup';
+}
+
+/** Nur die Arbeitszeit selbst, ohne Rüsten und Abschluss. */
 export function taskDuration(property: GardenProperty, kind: TaskKind) {
   const base = kind === 'mow' ? 30 : kind === 'water' ? 45 : 60;
   const sizeFactor = Math.pow(property.size / 120, 0.56);
@@ -503,10 +549,14 @@ function createTask(
   blocksPlayer: boolean,
   cost: number,
 ): PropertyTask {
+  const workStartsAt = at + taskSetupDuration(property, kind) * 1_000;
+  const workEndsAt = workStartsAt + taskDuration(property, kind) * 1_000;
   return {
     kind,
     startedAt: at,
-    endsAt: at + taskDuration(property, kind) * 1_000,
+    workStartsAt,
+    workEndsAt,
+    endsAt: workEndsAt + taskWrapUpDuration(property, kind) * 1_000,
     automated,
     blocksPlayer,
     cost,
@@ -523,8 +573,8 @@ function createTask(
 function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
   const task = property.task;
   if (!task?.effect) return;
-  const duration = Math.max(1, task.endsAt - task.startedAt);
-  const progress = clamp((Math.min(intervalEnd, task.endsAt) - task.startedAt) / duration, 0, 1);
+  const { from, to } = taskWorkWindow(task);
+  const progress = clamp((Math.min(intervalEnd, to) - from) / Math.max(1, to - from), 0, 1);
   const step = progress - (task.effectProgress ?? 0);
   if (step <= 0) return;
 
@@ -620,9 +670,9 @@ function accrueTaskRevenue(
   if (!task || task.kind === 'maintain') return;
 
   const payoutTotal = task.payoutTotal ?? taskPayout(property, task.kind);
-  const duration = Math.max(1, task.endsAt - task.startedAt);
-  const effectiveEnd = Math.min(intervalEnd, task.endsAt);
-  const elapsed = clamp((effectiveEnd - task.startedAt) / duration, 0, 1);
+  const { from, to } = taskWorkWindow(task);
+  const effectiveEnd = Math.min(intervalEnd, to);
+  const elapsed = clamp((effectiveEnd - from) / Math.max(1, to - from), 0, 1);
   const targetAccrued = Math.floor(payoutTotal * elapsed);
   const alreadyAccrued = task.payoutAccrued ?? 0;
   const increment = Math.max(0, targetAccrued - alreadyAccrued);
@@ -784,7 +834,7 @@ function triggerEvent(state: GameState, now: number) {
  */
 export function migrateState(raw: GameState): GameState | undefined {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.properties)) return undefined;
-  if (![1, 2, SAVE_VERSION].includes(raw.version)) return undefined;
+  if (!SUPPORTED_VERSIONS.includes(raw.version)) return undefined;
   const state = clone(raw);
   state.properties.forEach((property) => {
     property.broken ??= { mow: property.condition <= 0, water: property.condition <= 0 };
@@ -1068,7 +1118,11 @@ export function propertyStatus(property: GardenProperty) {
   if (property.condition < 50 || property.satisfaction <= 25) {
     return { label: 'Achtung', tone: 'warning' as const };
   }
-  if (property.task) return { label: 'In Arbeit', tone: 'info' as const };
+  if (property.task) {
+    const phase = taskPhase(property.task);
+    const label = phase === 'setup' ? 'Rüsten' : phase === 'wrapup' ? 'Abschluss' : 'In Arbeit';
+    return { label, tone: 'info' as const };
+  }
   if (property.grass >= 60 && property.grass <= 80) {
     return { label: 'Mähbereit', tone: 'good' as const };
   }

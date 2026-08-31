@@ -45,7 +45,8 @@ import {
   propertyStatus,
   TASK_LABELS,
   taskBlocksPlayer,
-  taskDuration,
+  taskPhase,
+  taskTotalDuration,
   TaskKind,
   ViewName,
   wateringPayout,
@@ -746,7 +747,11 @@ function ActionButtons({
         const disabled = !running && (Boolean(property.task) || (!automatic && manualBusy) || broken);
         // Die laufende Aktion traegt ihre eigene Darstellung, nicht die der Empfehlung.
         const on = kind === recommended && !disabled && !running;
-        const duration = formatDuration(taskDuration(property, kind) * 1_000);
+        const duration = formatDuration(taskTotalDuration(property, kind) * 1_000);
+        // Rüsten und Abschließen kosten eigene Zeit und heißen auch so.
+        const phase = running ? taskPhase(running) : undefined;
+        const phaseLabel =
+          phase === 'setup' ? 'Rüsten' : phase === 'wrapup' ? 'Abschluss' : ACTION_LABELS[kind];
         const meta =
           kind === 'mow'
             ? `+${formatMoney(mowingPayout(property))} · ${duration}`
@@ -787,7 +792,11 @@ function ActionButtons({
             </span>
             {!compact && (
               <span className="action__meta">
-                {running ? formatDuration(running.endsAt - Date.now()) : broken ? 'Defekt' : meta}
+                {running
+                  ? `${phaseLabel} · ${formatDuration(running.endsAt - Date.now())}`
+                  : broken
+                    ? 'Defekt'
+                    : meta}
               </span>
             )}
           </button>

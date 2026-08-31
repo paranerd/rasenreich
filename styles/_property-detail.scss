@@ -295,9 +295,22 @@
   border: 1px solid var(--primary-line);
   border-radius: var(--radius);
   transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background-color 0.12s,
+    color 0.12s,
+    border-color 0.12s,
+    transform 0.06s;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover:not(:disabled) {
+    background: var(--highlight);
+    border-color: var(--primary-line-strong);
+  }
+
+  /// Auch auf dem Touchscreen soll der Druck sichtbar sein.
+  &:active:not(:disabled) {
+    background: var(--highlight-hover);
+    transform: translateY(1px);
+  }
 
   &:disabled {
     color: var(--ink-faint);
@@ -320,6 +333,18 @@
   color: var(--primary);
   background: var(--paper);
   border-color: var(--primary-line-strong);
+
+  /// Der Griff zum Abbrechen darf sich als solcher anfühlen.
+  &:hover,
+  &:active {
+    color: var(--tone-bad);
+    background: var(--paper);
+    border-color: var(--line-bad);
+  }
+
+  &:active {
+    background: var(--bg-bad);
+  }
 }
 
 /// Ausgefallenes Gerät: gesperrt, aber als Schaden erkennbar.
@@ -334,6 +359,15 @@
   color: var(--primary-contrast);
   background: var(--primary);
   border-color: var(--primary);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--primary) 88%, #000);
+    border-color: color-mix(in oklab, var(--primary) 88%, #000);
+  }
+
+  &:active:not(:disabled) {
+    background: color-mix(in oklab, var(--primary) 78%, #000);
+  }
 }
 
 .action__label {
