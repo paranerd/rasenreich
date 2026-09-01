@@ -1,0 +1,309 @@
+@use 'mixins' as *;
+
+// Während der Einführung ist nur die Tutorial-Karte bedienbar. In Action-
+// Schritten wird genau das hervorgehobene Spielelement wieder freigegeben.
+.app--tutorial button {
+  pointer-events: none;
+}
+
+.app--tutorial .tutorial-card button,
+.app--tutorial-action .tutorial-target,
+.app--tutorial-action .tutorial-target * {
+  pointer-events: auto;
+}
+
+.tutorial-target {
+  position: relative !important;
+  z-index: 81 !important;
+  isolation: isolate;
+}
+
+.tutorial-layer {
+  pointer-events: none;
+}
+
+.tutorial-layer__shade {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(22 29 18 / 64%);
+  backdrop-filter: blur(2px);
+}
+
+.tutorial-layer--targeted .tutorial-layer__shade {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.tutorial-layer--intro .tutorial-layer__shade {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.tutorial-spotlight {
+  position: fixed;
+  z-index: 80;
+  border: 2px solid rgb(210 235 191 / 92%);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 9999px rgb(22 29 18 / 64%),
+    0 0 0 4px rgb(92 143 58 / 30%),
+    0 12px 30px rgb(0 0 0 / 22%);
+  pointer-events: none;
+  transition: all 180ms ease-out;
+}
+
+.tutorial-card {
+  @include card;
+
+  position: fixed;
+  left: 50%;
+  z-index: 82;
+  width: min(25rem, calc(100vw - 24px));
+  max-height: calc(100dvh - 40px);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  color: var(--ink);
+  border-color: rgb(255 255 255 / 20%);
+  box-shadow: var(--shadow-2xl);
+  pointer-events: auto;
+  transform: translateX(-50%);
+  animation: tutorial-card-in 180ms ease-out;
+}
+
+@keyframes tutorial-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+}
+
+.tutorial-card--intro {
+  top: 50%;
+  width: min(34rem, calc(100vw - 24px));
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 9999px rgb(22 29 18 / 64%),
+    var(--shadow-2xl);
+
+  &.tutorial-card {
+    animation-name: tutorial-intro-in;
+  }
+}
+
+@keyframes tutorial-intro-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+}
+
+.tutorial-card__skip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  color: var(--ink-mute);
+  background: rgb(255 253 247 / 88%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  place-items: center;
+
+  &:hover {
+    color: var(--ink);
+    background: var(--paper);
+  }
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+.tutorial-card__body {
+  padding: 20px;
+}
+
+.tutorial-card__progress {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-right: 28px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.tutorial-card__track {
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 999px;
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--primary);
+    border-radius: inherit;
+    transition: width 180ms ease-out;
+  }
+}
+
+.tutorial-card__title {
+  margin-top: 14px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+.tutorial-card__text {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.tutorial-card__next {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.tutorial-card__action {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--highlight);
+  border-radius: var(--radius);
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.tutorial-intro__visual {
+  position: relative;
+  height: 142px;
+  overflow: hidden;
+  background: var(--primary);
+}
+
+.tutorial-intro__image,
+.tutorial-intro__shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tutorial-intro__image {
+  object-fit: cover;
+  object-position: center 56%;
+}
+
+.tutorial-intro__shade {
+  background:
+    linear-gradient(90deg, rgb(20 31 16 / 72%), rgb(20 31 16 / 12%)),
+    linear-gradient(0deg, rgb(20 31 16 / 38%), transparent 55%);
+}
+
+.tutorial-intro__eyebrow {
+  @include label(9px);
+
+  position: absolute;
+  right: 22px;
+  bottom: 18px;
+  left: 22px;
+  color: rgb(255 253 247 / 82%);
+}
+
+.tutorial-confirm {
+  padding-top: 24px;
+}
+
+.tutorial-confirm__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.tutorial-intro__goals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 16px 20px 0;
+
+  > span {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    padding: 9px;
+    font-size: 11px;
+    color: var(--primary);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 39.999rem) {
+  .tutorial-card {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .tutorial-card__body {
+    padding: 18px;
+  }
+
+  .tutorial-card__title {
+    font-size: 18px;
+  }
+
+  .tutorial-intro__visual {
+    height: 116px;
+  }
+
+  .tutorial-intro__eyebrow {
+    right: 16px;
+    bottom: 14px;
+    left: 16px;
+  }
+
+  .tutorial-intro__goals {
+    gap: 5px;
+    padding: 12px 18px 0;
+
+    > span {
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 4px;
+      font-size: 10px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-card {
+    animation: none;
+  }
+}

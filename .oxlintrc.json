@@ -21,11 +21,7 @@
     "typeAware": true,
     "typeCheck": true
   },
-  "ignorePatterns": [
-    "build/**",
-    "dist/**",
-    "coverage/**"
-  ],
+  "ignorePatterns": ["build/**", "dist/**", "coverage/**"],
   "rules": {
     "no-array-constructor": "error",
     "no-var": "error",

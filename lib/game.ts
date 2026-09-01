@@ -3,6 +3,7 @@ export type TaskKind = 'mow' | 'water' | 'maintain';
 export type BreakableKind = 'mow' | 'water';
 export const BREAKABLE: BreakableKind[] = ['mow', 'water'];
 export type ViewName = 'overview' | 'offers' | 'upgrades';
+export type KnowledgeKind = TaskKind | 'fertilizer' | 'weedControl';
 
 export interface EquipmentLevel {
   name: string;
@@ -43,7 +44,12 @@ export interface PropertyTask {
   /** Fertig, inklusive Abschluss. */
   endsAt: number;
   automated: boolean;
-  blocksPlayer: boolean;
+  /** Belegt waehrend der gesamten Laufzeit einen Mitarbeiter. */
+  usesWorker: boolean;
+  /** Nullbasiertes Mitarbeiter-Slot, bei Automatik und freihändiger Technik leer. */
+  workerId?: number;
+  /** Nur für die Migration alter Spielstände. */
+  blocksPlayer?: boolean;
   cost: number;
   payoutTotal?: number;
   payoutAccrued?: number;
@@ -55,6 +61,16 @@ export interface PropertyTask {
   effectProgress?: number;
   /** Abgebrochen — es läuft nur noch der Abschluss, ohne weitere Wirkung. */
   cancelled?: boolean;
+}
+
+export interface ResearchTask {
+  kind: KnowledgeKind;
+  name: string;
+  targetLevel?: number;
+  startedAt: number;
+  endsAt: number;
+  cost: number;
+  workerId: number;
 }
 
 export interface GardenProperty {
@@ -76,6 +92,8 @@ export interface GardenProperty {
   broken: Record<BreakableKind, boolean>;
   fertilizer: boolean;
   weedControl: boolean;
+  tasks: PropertyTask[];
+  /** Nur für die Migration alter Spielstände. */
   task?: PropertyTask;
   rescueUntil?: number;
   lifetimeRevenue: number;
@@ -98,7 +116,7 @@ export interface ContractOffer {
 
 export interface GameEvent {
   id: string;
-  type: 'rain' | 'heat' | 'frost' | 'mole' | 'pipe' | 'review';
+  type: 'rain' | 'heat' | 'mole' | 'review';
   title: string;
   description: string;
   propertyId?: string;
@@ -113,15 +131,32 @@ export interface GameLog {
   tone: 'good' | 'neutral' | 'warning';
 }
 
-export const SAVE_VERSION = 4;
-const SUPPORTED_VERSIONS = [1, 2, 3, SAVE_VERSION];
+export const SAVE_VERSION = 7;
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, SAVE_VERSION];
+
+export const MAX_WORKERS = 4;
+
+export interface WorkerUpgrade {
+  workers: number;
+  reputation: number;
+  cost: number;
+}
+
+export const WORKER_UPGRADES: WorkerUpgrade[] = [
+  { workers: 2, reputation: 5, cost: 500 },
+  { workers: 3, reputation: 15, cost: 2_500 },
+  { workers: 4, reputation: 30, cost: 10_000 },
+];
 
 export interface GameState {
   version: number;
+  /** Aktiver Tutorial-Schritt. `null` bedeutet abgeschlossen oder übersprungen. */
+  tutorialStep: number | null;
   money: number;
   reputation: number;
   lifetimeRevenue: number;
   sessionRevenue: number;
+  workers: number;
   properties: GardenProperty[];
   offers: ContractOffer[];
   unlocked: Record<TaskKind, number>;
@@ -129,6 +164,7 @@ export interface GameState {
     fertilizer: boolean;
     weedControl: boolean;
   };
+  researchTask?: ResearchTask;
   activeEvent?: GameEvent;
   weather: 'mild' | 'heat' | 'rain';
   weatherUntil: number;
@@ -189,9 +225,10 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
       unlockCost: 5_000,
       installCost: 7_500,
       reputation: 32,
-      speed: 0.28,
+      speed: 0.65,
       automated: true,
-      description: 'Mäht selbstständig im optimalen Fenster.',
+      description:
+        'Mäht langsamer als der Aufsitzmäher, startet dafür selbstständig im optimalen Fenster.',
     },
   ],
   water: [
@@ -201,7 +238,8 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
       installCost: 0,
       reputation: 0,
       speed: 1,
-      description: 'Günstig, bindet dich aber während des Wässerns.',
+      description:
+        'Günstig, bindet aber einen Mitarbeiter während des Wässerns.',
     },
     {
       name: 'Bügelregner',
@@ -274,8 +312,8 @@ export const ACTION_LABELS: Record<TaskKind, string> = {
 
 const OFFER_TEMPLATES = [
   {
-    minRep: 2,
-    type: 'Reihenhausgarten',
+    minRep: 1,
+    type: 'Wohnhaus',
     names: ['Familie Wagner', 'Herr Krüger', 'Familie Neumann'],
     sizes: [140, 180],
     growth: 1,
@@ -320,9 +358,13 @@ const OFFER_TEMPLATES = [
   },
 ] as const;
 
-const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
-const clone = <T,>(value: T): T => structuredClone(value);
+const uid = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const clamp = (value: number, min = 0, max = 100) =>
+  Math.min(max, Math.max(min, value));
+const clone = <T>(value: T): T => structuredClone(value);
+const nextRandomOfferAt = (now: number) =>
+  now + (45 + Math.random() * 135) * 1_000;
 
 const addLog = (
   state: GameState,
@@ -335,66 +377,51 @@ const addLog = (
 };
 
 export function createInitialState(now = Date.now()): GameState {
-  const state: GameState = {
+  return {
     version: SAVE_VERSION,
+    tutorialStep: 0,
     money: 240,
     reputation: 0,
     lifetimeRevenue: 0,
     sessionRevenue: 0,
-    properties: [
+    workers: 1,
+    properties: [],
+    offers: [
       {
-        id: 'bergmann',
+        id: 'starter-bergmann',
         name: 'Familie Bergmann',
-        subtitle: 'Dein erster Stammkunde',
+        subtitle: 'Dein erster Auftrag',
         type: 'Vorgarten',
         size: 120,
         payout: 40,
         growthFactor: 1,
         drainage: 1,
         customerDemand: 0.9,
-        grass: 63,
-        moisture: 88,
-        condition: 94,
-        // Wird gleich durch den Zielwert ersetzt, damit der erste Eindruck stimmt.
-        satisfaction: 0,
-        equipment: { mow: 0, water: 0, maintain: 0 },
-        broken: { mow: false, water: false },
-        fertilizer: false,
-        weedControl: false,
-        lifetimeRevenue: 0,
-        completedJobs: 0,
-        protected: true,
+        // Das Einführungsangebot verfällt nicht, während der Spieler liest.
+        expiresAt: now + 365 * 24 * 60 * 60_000,
       },
     ],
-    offers: [],
     unlocked: { mow: 0, water: 0, maintain: 0 },
     chemistryUnlocked: { fertilizer: false, weedControl: false },
     weather: 'mild',
     weatherUntil: 0,
     nextEventAt: now + 4 * 60_000,
-    nextOfferAt: now + 90_000,
+    nextOfferAt: nextRandomOfferAt(now),
     lastUpdatedAt: now,
     logs: [
       {
         id: uid(),
         at: now,
-        text: 'Familie Bergmann hat dich mit der Rasenpflege beauftragt.',
-        tone: 'good',
+        text: 'Familie Bergmann wartet auf deine Rückmeldung.',
+        tone: 'neutral',
       },
     ],
   };
-  state.properties.forEach((property) => {
-    property.satisfaction = satisfactionTarget(property);
-  });
-  return state;
 }
 
-/**
- * Wie gut die Feuchtigkeit aus Kundensicht dasteht. Bis 100 zählt der Wert
- * selbst, darüber wird Staunässe abgezogen — sonst wäre Überwässern gratis.
- */
+/** Wie gut die Feuchtigkeit aus Kundensicht dasteht. */
 export function moistureQuality(moisture: number) {
-  return moisture <= 100 ? clamp(moisture) : clamp(100 - (moisture - 100) * 1.6);
+  return clamp(moisture);
 }
 
 /**
@@ -402,7 +429,11 @@ export function moistureQuality(moisture: number) {
  * Zustand deiner Technik ist eigentlich dein Problem — schlägt aber über
  * Verzögerungen und Ausfälle durch.
  */
-const SATISFACTION_WEIGHTS: Record<TaskKind, number> = { mow: 0.55, water: 0.35, maintain: 0.1 };
+const SATISFACTION_WEIGHTS: Record<TaskKind, number> = {
+  mow: 0.55,
+  water: 0.35,
+  maintain: 0.1,
+};
 
 /** Wie zufrieden der Kunde bei diesem Zustand auf Dauer wäre. */
 export function satisfactionTarget(property: GardenProperty) {
@@ -451,8 +482,16 @@ export function partsCost(property: GardenProperty, kind: BreakableKind) {
  * noch am Gerät. Genau das macht große Grundstücke lohnender als viele kleine.
  * Automatik rüstet nicht — der Roboter fährt einfach los.
  */
-const SETUP_SECONDS: Record<TaskKind, number> = { mow: 6, water: 5, maintain: 8 };
-const WRAPUP_SECONDS: Record<TaskKind, number> = { mow: 5, water: 4, maintain: 6 };
+const SETUP_SECONDS: Record<TaskKind, number> = {
+  mow: 6,
+  water: 5,
+  maintain: 8,
+};
+const WRAPUP_SECONDS: Record<TaskKind, number> = {
+  mow: 5,
+  water: 4,
+  maintain: 6,
+};
 
 export function taskSetupDuration(property: GardenProperty, kind: TaskKind) {
   return isAutomated(property, kind) ? 0 : SETUP_SECONDS[kind];
@@ -472,7 +511,10 @@ export function taskTotalDuration(property: GardenProperty, kind: TaskKind) {
 }
 
 export function taskWorkWindow(task: PropertyTask) {
-  return { from: task.workStartsAt ?? task.startedAt, to: task.workEndsAt ?? task.endsAt };
+  return {
+    from: task.workStartsAt ?? task.startedAt,
+    to: task.workEndsAt ?? task.endsAt,
+  };
 }
 
 /**
@@ -499,21 +541,26 @@ export function taskDuration(property: GardenProperty, kind: TaskKind) {
   // Langes und nasses Gras ist zäher, nicht nur mehr.
   if (kind === 'mow' && property.grass > 100) conditionFactor *= 1.5;
   else if (kind === 'mow' && property.grass > 80) conditionFactor *= 1.2;
-  if (kind === 'mow' && property.moisture > 100) conditionFactor *= 1.4;
   // Eine Reparatur dauert länger als die reine Pflege.
   if (kind === 'maintain') conditionFactor *= 1 + brokenCount(property) * 0.6;
-  return Math.max(8, Math.round(base * sizeFactor * equipment.speed * conditionFactor * load));
+  return Math.max(
+    8,
+    Math.round(base * sizeFactor * equipment.speed * conditionFactor * load),
+  );
 }
 
 export function maintenanceCost(property: GardenProperty) {
   const upkeep = Math.max(
     8,
-    Math.round((100 - property.condition) * 0.7 * Math.pow(property.size / 120, 0.25)),
+    Math.round(
+      (100 - property.condition) * 0.7 * Math.pow(property.size / 120, 0.25),
+    ),
   );
   return (
     upkeep +
     BREAKABLE.reduce(
-      (sum, kind) => (property.broken[kind] ? sum + partsCost(property, kind) : sum),
+      (sum, kind) =>
+        property.broken[kind] ? sum + partsCost(property, kind) : sum,
       0,
     )
   );
@@ -542,7 +589,11 @@ export function taskWorkload(property: GardenProperty, kind: TaskKind) {
 }
 
 /** Pensum, bei dem die Arbeit genau die Grundzeit dauert. */
-const REFERENCE_WORKLOAD: Record<TaskKind, number> = { mow: MAX_CUT, water: 50, maintain: 58 };
+const REFERENCE_WORKLOAD: Record<TaskKind, number> = {
+  mow: MAX_CUT,
+  water: 50,
+  maintain: 58,
+};
 
 export function mowingPayout(property: GardenProperty, grass = property.grass) {
   const qualityBase = property.weedControl ? 1.08 : 1;
@@ -568,7 +619,10 @@ export function taskPayout(property: GardenProperty, kind: TaskKind) {
  * dieselbe Sprache wie die Gauges: 100 % ist optimal, 0 % ist schlecht.
  */
 /** Anteil am vollen Schnitt in Prozent — 100 heißt: mehr geht nicht. */
-export function mowingPayoutShare(property: GardenProperty, grass = property.grass) {
+export function mowingPayoutShare(
+  property: GardenProperty,
+  grass = property.grass,
+) {
   const full = property.payout * 1.2 * (property.weedControl ? 1.08 : 1);
   return Math.round((mowingPayout(property, grass) / full) * 100);
 }
@@ -578,7 +632,12 @@ export function isAutomated(property: GardenProperty, kind: TaskKind) {
 }
 
 /** Ein Einsatz kann das benutzte Gerät zerlegen — je schlechter gewartet, desto eher. */
-function rollFailure(state: GameState, property: GardenProperty, kind: TaskKind, at: number) {
+function rollFailure(
+  state: GameState,
+  property: GardenProperty,
+  kind: TaskKind,
+  at: number,
+) {
   if (kind === 'maintain' || property.broken[kind]) return;
   if (Math.random() >= failureRisk(property, kind)) return;
   property.broken[kind] = true;
@@ -591,11 +650,11 @@ function rollFailure(state: GameState, property: GardenProperty, kind: TaskKind,
   );
 }
 
-/** Verschleiß eines Mähvorgangs — nasser und langer Rasen kostet mehr. */
+/** Verschleiß eines Mähvorgangs — besonders langer Rasen kostet mehr. */
 function mowingWear(property: GardenProperty) {
-  const wetFactor = property.moisture > 100 ? 2 : 1;
-  const longFactor = property.grass > 100 ? 2.2 : property.grass > 80 ? 1.45 : 1;
-  return 3.2 * Math.pow(property.size / 120, 0.3) * wetFactor * longFactor;
+  const longFactor =
+    property.grass > 100 ? 2.2 : property.grass > 80 ? 1.45 : 1;
+  return 3.2 * Math.pow(property.size / 120, 0.3) * longFactor;
 }
 
 /**
@@ -605,9 +664,13 @@ function mowingWear(property: GardenProperty) {
  */
 function taskEffect(property: GardenProperty, kind: TaskKind): TaskEffect {
   if (kind === 'mow') {
-    return { target: { key: 'grass', value: GRASS_FLOOR }, condition: -mowingWear(property) };
+    return {
+      target: { key: 'grass', value: GRASS_FLOOR },
+      condition: -mowingWear(property),
+    };
   }
-  if (kind === 'water') return { target: { key: 'moisture', value: 100 }, condition: -0.8 };
+  if (kind === 'water')
+    return { target: { key: 'moisture', value: 100 }, condition: -0.8 };
   return { target: { key: 'condition', value: 100 } };
 }
 
@@ -616,8 +679,9 @@ function createTask(
   kind: TaskKind,
   at: number,
   automated: boolean,
-  blocksPlayer: boolean,
+  usesWorker: boolean,
   cost: number,
+  workerId?: number,
 ): PropertyTask {
   const workStartsAt = at + taskSetupDuration(property, kind) * 1_000;
   const workEndsAt = workStartsAt + taskDuration(property, kind) * 1_000;
@@ -628,7 +692,8 @@ function createTask(
     workEndsAt,
     endsAt: workEndsAt + taskWrapUpDuration(property, kind) * 1_000,
     automated,
-    blocksPlayer,
+    usesWorker,
+    workerId,
     cost,
     payoutTotal: kind === 'maintain' ? undefined : taskPayout(property, kind),
     payoutAccrued: 0,
@@ -640,11 +705,18 @@ function createTask(
 }
 
 /** Lässt die Werte während der Arbeit mitlaufen, statt erst am Ende zu springen. */
-function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
-  const task = property.task;
-  if (!task?.effect || task.cancelled) return;
+function accrueTaskEffect(
+  property: GardenProperty,
+  task: PropertyTask,
+  intervalEnd: number,
+) {
+  if (!task.effect || task.cancelled) return;
   const { from, to } = taskWorkWindow(task);
-  const progress = clamp((Math.min(intervalEnd, to) - from) / Math.max(1, to - from), 0, 1);
+  const progress = clamp(
+    (Math.min(intervalEnd, to) - from) / Math.max(1, to - from),
+    0,
+    1,
+  );
   const step = progress - (task.effectProgress ?? 0);
   if (step <= 0) return;
 
@@ -657,21 +729,33 @@ function accrueTaskEffect(property: GardenProperty, intervalEnd: number) {
     // Beim letzten Schritt ist er 1, deshalb landet der Wert exakt auf dem Ziel.
     const share = Math.min(1, step / Math.max(1e-9, 1 - previous));
     const current = property[target.key];
-    const max = target.key === 'condition' ? 100 : 150;
-    property[target.key] = clamp(current + (target.value - current) * share, 0, max);
+    const max = target.key === 'grass' ? 150 : 100;
+    property[target.key] = clamp(
+      current + (target.value - current) * share,
+      0,
+      max,
+    );
   }
-  if (condition) property.condition = clamp(property.condition + condition * step);
+  if (condition)
+    property.condition = clamp(property.condition + condition * step);
 }
 
-function completeTask(state: GameState, property: GardenProperty, at: number) {
-  const task = property.task;
-  if (!task) return;
-
+function completeTask(
+  state: GameState,
+  property: GardenProperty,
+  task: PropertyTask,
+  at: number,
+) {
   // Eine abgebrochene Aufgabe wird nur noch aufgeräumt: kein Restlohn, kein
   // gezählter Schnitt, keine Reputation, keine Reparatur.
   if (task.cancelled) {
-    property.task = undefined;
-    addLog(state, `${property.name}: ${TASK_LABELS[task.kind]} beendet.`, 'neutral', at);
+    property.tasks = property.tasks.filter((entry) => entry !== task);
+    addLog(
+      state,
+      `${property.name}: ${TASK_LABELS[task.kind]} beendet.`,
+      'neutral',
+      at,
+    );
     return;
   }
 
@@ -706,7 +790,6 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
   }
 
   if (task.kind === 'water') {
-    const before = task.startMoisture ?? property.moisture;
     const payout = task.payoutTotal ?? wateringPayout(property);
     const remainingPayout = Math.max(0, payout - (task.payoutAccrued ?? 0));
 
@@ -736,17 +819,17 @@ function completeTask(state: GameState, property: GardenProperty, at: number) {
     );
   }
 
-  property.task = undefined;
+  property.tasks = property.tasks.filter((entry) => entry !== task);
 }
 
 function accrueTaskRevenue(
   state: GameState,
   property: GardenProperty,
+  task: PropertyTask,
   intervalStart: number,
   intervalEnd: number,
 ) {
-  const task = property.task;
-  if (!task || task.kind === 'maintain' || task.cancelled) return;
+  if (task.kind === 'maintain' || task.cancelled) return;
 
   const payoutTotal = task.payoutTotal ?? taskPayout(property, task.kind);
   const { from, to } = taskWorkWindow(task);
@@ -766,49 +849,70 @@ function accrueTaskRevenue(
   }
 }
 
-function startAutomatedTask(state: GameState, property: GardenProperty, kind: TaskKind, at: number) {
-  if (property.task) return;
+function startAutomatedTask(
+  state: GameState,
+  property: GardenProperty,
+  kind: TaskKind,
+  at: number,
+) {
+  if (property.tasks.some((task) => task.kind === kind)) return;
   const cost = kind === 'maintain' ? maintenanceCost(property) : 0;
   if (cost > state.money) return;
   state.money -= cost;
-  property.task = createTask(property, kind, at, true, false, cost);
+  property.tasks.push(createTask(property, kind, at, true, false, cost));
 }
 
 function tryAutomation(state: GameState, property: GardenProperty, at: number) {
-  if (property.task) return;
-  if (isAutomated(property, 'maintain') && (property.condition <= 48 || isBroken(property))) {
+  if (
+    isAutomated(property, 'maintain') &&
+    (property.condition <= 48 || isBroken(property))
+  ) {
     startAutomatedTask(state, property, 'maintain', at);
-    return;
   }
-  if (isAutomated(property, 'water') && !property.broken.water && property.moisture <= 55) {
+  if (
+    isAutomated(property, 'water') &&
+    !property.broken.water &&
+    property.moisture <= 55
+  ) {
     startAutomatedTask(state, property, 'water', at);
-    return;
   }
-  if (isAutomated(property, 'mow') && !property.broken.mow && property.grass >= 64) {
+  if (
+    isAutomated(property, 'mow') &&
+    !property.broken.mow &&
+    property.grass >= 64
+  ) {
     startAutomatedTask(state, property, 'mow', at);
   }
 }
 
-function advanceNaturalState(state: GameState, property: GardenProperty, seconds: number) {
+function advanceNaturalState(
+  state: GameState,
+  property: GardenProperty,
+  seconds: number,
+) {
   const minutes = seconds / 60;
   const fertilizer = property.fertilizer ? 1.5 : 1;
   const fertilizerWater = property.fertilizer ? 1.3 : 1;
-  const moistureGrowth = property.moisture < 50 ? 0.5 : property.moisture > 110 ? 0.72 : 1;
+  const moistureGrowth = property.moisture < 50 ? 0.5 : 1;
   const heatWater = state.weather === 'heat' ? 1.75 : 1;
-  const rainGain = state.weather === 'rain' ? 1.35 * minutes : 0;
+  const rainGain = state.weather === 'rain' ? 3 * minutes : 0;
 
   property.grass = clamp(
-    property.grass + 1.25 * minutes * property.growthFactor * fertilizer * moistureGrowth,
+    property.grass +
+      1.25 * minutes * property.growthFactor * fertilizer * moistureGrowth,
     0,
     150,
   );
   property.moisture = clamp(
-    property.moisture - 0.82 * minutes * property.drainage * fertilizerWater * heatWater + rainGain,
+    property.moisture -
+      0.82 * minutes * property.drainage * fertilizerWater * heatWater +
+      rainGain,
     0,
-    150,
+    100,
   );
 
-  if (!property.task) property.condition = clamp(property.condition - 0.006 * minutes);
+  if (property.tasks.length === 0)
+    property.condition = clamp(property.condition - 0.006 * minutes);
 
   // Die Zufriedenheit folgt dem Zustand der drei Werte, aber träge. Der
   // Anspruch des Kunden wirkt dabei einseitig: er sinkt schneller, als er sich
@@ -824,22 +928,42 @@ function advanceNaturalState(state: GameState, property: GardenProperty, seconds
   );
   // Erholt sich der Kunde wieder, ist die Frist vom Tisch — unabhaengig davon,
   // ob gerade eine Aufgabe fertig geworden ist.
-  if (property.rescueUntil && property.satisfaction > 20) property.rescueUntil = undefined;
+  if (property.rescueUntil && property.satisfaction > 20)
+    property.rescueUntil = undefined;
 }
 
 function createOffer(state: GameState, now: number): ContractOffer | undefined {
-  const available = OFFER_TEMPLATES.filter((template) => state.reputation >= template.minRep);
-  if (!available.length) return undefined;
-  const template = available[Math.floor(Math.random() * available.length)];
-  const size = Math.round(
-    template.sizes[0] + Math.random() * (template.sizes[1] - template.sizes[0]),
+  const available = OFFER_TEMPLATES.filter(
+    (template) => state.reputation >= template.minRep,
   );
-  const name = template.names[Math.floor(Math.random() * template.names.length)];
+  if (!available.length) return undefined;
   const existingNames = new Set([
     ...state.properties.map((property) => property.name),
     ...state.offers.map((offer) => offer.name),
   ]);
-  if (existingNames.has(name)) return undefined;
+  const candidates = available.flatMap((template) =>
+    template.names
+      .filter((name) => !existingNames.has(name))
+      .map((name) => ({ template, name })),
+  );
+  const fallbackTemplate =
+    available[Math.floor(Math.random() * available.length)];
+  const fallbackBase =
+    fallbackTemplate.names[
+      Math.floor(Math.random() * fallbackTemplate.names.length)
+    ];
+  let suffix = 2;
+  let fallbackName: string = fallbackBase;
+  while (existingNames.has(fallbackName)) {
+    fallbackName = `${fallbackBase} ${suffix}`;
+    suffix += 1;
+  }
+  const { template, name } = candidates.length
+    ? candidates[Math.floor(Math.random() * candidates.length)]
+    : { template: fallbackTemplate, name: fallbackName };
+  const size = Math.round(
+    template.sizes[0] + Math.random() * (template.sizes[1] - template.sizes[0]),
+  );
   const payout = Math.round(40 * Math.pow(size / 120, 0.78) * template.demand);
   return {
     id: uid(),
@@ -855,10 +979,36 @@ function createOffer(state: GameState, now: number): ContractOffer | undefined {
   };
 }
 
+/**
+ * Jede neu erreichte Reputationsstufe erzeugt garantiert eine Anfrage. Ist
+ * die Liste voll, weicht dafür das Angebot mit der kürzesten Restlaufzeit.
+ */
+function addLevelUpOffers(
+  state: GameState,
+  previousReputation: number,
+  now: number,
+) {
+  const gainedLevels = Math.max(
+    0,
+    Math.floor(state.reputation) - Math.floor(previousReputation),
+  );
+  for (let index = 0; index < gainedLevels; index += 1) {
+    if (state.offers.length >= 3) {
+      const oldest = state.offers.reduce((candidate, offer) =>
+        offer.expiresAt < candidate.expiresAt ? offer : candidate,
+      );
+      state.offers = state.offers.filter((offer) => offer.id !== oldest.id);
+    }
+    const offer = createOffer(state, now);
+    if (offer) state.offers.push(offer);
+  }
+}
+
 function triggerEvent(state: GameState, now: number) {
-  const types: GameEvent['type'][] = ['rain', 'heat', 'frost', 'mole', 'pipe', 'review'];
+  const types: GameEvent['type'][] = ['rain', 'heat', 'mole', 'review'];
   const type = types[Math.floor(Math.random() * types.length)];
-  const property = state.properties[Math.floor(Math.random() * state.properties.length)];
+  const property =
+    state.properties[Math.floor(Math.random() * state.properties.length)];
   const event: GameEvent = {
     id: uid(),
     type,
@@ -871,20 +1021,17 @@ function triggerEvent(state: GameState, now: number) {
     state.weather = 'rain';
     state.weatherUntil = now + 3 * 60_000;
     event.title = 'Regenschauer';
-    event.description = 'Die Region wird drei Minuten lang natürlich bewässert.';
+    event.description = 'Alle Grundstücke werden natürlich bewässert.';
+    state.properties.forEach((item) => {
+      item.moisture = clamp(item.moisture + 18, 0, 100);
+    });
   }
   if (type === 'heat') {
     state.weather = 'heat';
     state.weatherUntil = now + 4 * 60_000;
     event.title = 'Hitzewelle';
-    event.description = 'Der Boden trocknet vorübergehend deutlich schneller aus.';
-  }
-  if (type === 'frost') {
-    event.title = 'Unerwarteter Frost';
-    event.description = 'Empfindliche Bewässerungstechnik hat gelitten.';
-    state.properties.forEach((item) => {
-      if (item.equipment.water >= 2) item.condition = clamp(item.condition - 10);
-    });
+    event.description =
+      'Der Boden trocknet vorübergehend deutlich schneller aus.';
   }
   if (type === 'mole') {
     event.title = 'Maulwurf entdeckt';
@@ -892,12 +1039,6 @@ function triggerEvent(state: GameState, now: number) {
     event.propertyId = property.id;
     event.actionLabel = 'Schonend umsiedeln';
     property.satisfaction = clamp(property.satisfaction - 5);
-  }
-  if (type === 'pipe') {
-    event.title = 'Geplatztes Wasserrohr';
-    event.description = `${property.name}: Der Boden wird rapide nass.`;
-    event.propertyId = property.id;
-    property.moisture = clamp(property.moisture + 58, 0, 150);
   }
   if (type === 'review') {
     event.title = 'Herzliche Empfehlung';
@@ -908,7 +1049,12 @@ function triggerEvent(state: GameState, now: number) {
   }
 
   state.activeEvent = event;
-  addLog(state, `${event.title}: ${event.description}`, type === 'review' ? 'good' : 'warning', now);
+  addLog(
+    state,
+    `${event.title}: ${event.description}`,
+    type === 'review' ? 'good' : 'warning',
+    now,
+  );
 }
 
 /**
@@ -916,23 +1062,46 @@ function triggerEvent(state: GameState, now: number) {
  * nur den Totalausfall über Zustand 0; daraus werden beide Geräte defekt.
  */
 export function migrateState(raw: GameState): GameState | undefined {
-  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.properties)) return undefined;
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.properties))
+    return undefined;
   if (!SUPPORTED_VERSIONS.includes(raw.version)) return undefined;
   const state = clone(raw);
+  state.workers = Math.min(
+    MAX_WORKERS,
+    Math.max(1, Math.floor(state.workers ?? 1)),
+  );
+  // Bestehende Betriebe werden nicht nachträglich in die Einführung geschickt.
+  state.tutorialStep = raw.version < 5 ? null : (state.tutorialStep ?? null);
   state.properties.forEach((property) => {
-    property.broken ??= { mow: property.condition <= 0, water: property.condition <= 0 };
+    property.moisture = clamp(property.moisture, 0, 100);
+    property.broken ??= {
+      mow: property.condition <= 0,
+      water: property.condition <= 0,
+    };
+    const legacyTask = property.task;
+    property.tasks ??= legacyTask ? [legacyTask] : [];
+    delete property.task;
     // Vor Version 3 sprangen die Werte erst am Ende; laufende Aufgaben
     // bekommen ihre Wirkung nachtraeglich und tragen sie ueber die Restzeit ab.
-    if (property.task) {
-      property.task.startGrass ??= property.grass;
-      property.task.startMoisture ??= property.moisture;
-      property.task.effectProgress ??= 0;
+    property.tasks.forEach((task) => {
+      task.startGrass ??= property.grass;
+      task.startMoisture ??= property.moisture;
+      task.effectProgress ??= 0;
+      task.usesWorker ??= task.blocksPlayer ?? !task.automated;
+      if (task.usesWorker) task.workerId ??= 0;
       // Vor Version 4 trug die Wirkung feste Mengen statt eines Ziels.
-      if (!property.task.effect?.target) {
-        property.task.effect = taskEffect(property, property.task.kind);
+      if (!task.effect?.target) {
+        task.effect = taskEffect(property, task.kind);
       }
-    }
+    });
   });
+  const legacyEventType = (state.activeEvent as { type?: string } | undefined)
+    ?.type;
+  if (legacyEventType === 'pipe' || legacyEventType === 'frost') {
+    state.activeEvent = undefined;
+  }
+  if (raw.version < 6) state.researchTask = undefined;
+  if (state.researchTask) state.researchTask.workerId ??= 0;
   state.version = SAVE_VERSION;
   return state;
 }
@@ -946,22 +1115,52 @@ export function migrateState(raw: GameState): GameState | undefined {
  */
 function nextStepEnd(state: GameState, cursor: number, now: number) {
   let stepEnd = Math.min(now, cursor + 30_000);
+  if (
+    state.researchTask?.endsAt &&
+    state.researchTask.endsAt > cursor &&
+    state.researchTask.endsAt < stepEnd
+  ) {
+    stepEnd = state.researchTask.endsAt;
+  }
   state.properties.forEach((property) => {
-    const task = property.task;
-    if (!task) return;
-    const { from, to } = taskWorkWindow(task);
-    for (const boundary of [from, to, task.endsAt]) {
-      if (boundary > cursor && boundary < stepEnd) stepEnd = boundary;
-    }
+    property.tasks.forEach((task) => {
+      const { from, to } = taskWorkWindow(task);
+      for (const boundary of [from, to, task.endsAt]) {
+        if (boundary > cursor && boundary < stepEnd) stepEnd = boundary;
+      }
+    });
   });
   return stepEnd;
 }
 
-export function simulateGame(source: GameState, now = Date.now(), offline = false) {
+function completeResearch(state: GameState, at: number) {
+  const task = state.researchTask;
+  if (!task) return;
+  if (task.kind === 'fertilizer' || task.kind === 'weedControl') {
+    state.chemistryUnlocked[task.kind] = true;
+  } else if (task.targetLevel !== undefined) {
+    state.unlocked[task.kind] = Math.max(
+      state.unlocked[task.kind],
+      task.targetLevel,
+    );
+  }
+  addLog(state, `${task.name} wurde freigeschaltet.`, 'good', at);
+  state.researchTask = undefined;
+}
+
+export function simulateGame(
+  source: GameState,
+  now = Date.now(),
+  offline = false,
+) {
   const state = clone(source);
   state.money = Math.round(state.money);
   const previousMoney = state.money;
-  const previousJobs = state.properties.reduce((sum, property) => sum + property.completedJobs, 0);
+  const previousReputation = state.reputation;
+  const previousJobs = state.properties.reduce(
+    (sum, property) => sum + property.completedJobs,
+    0,
+  );
   const elapsedMs = Math.max(0, now - state.lastUpdatedAt);
   let cursor = state.lastUpdatedAt;
 
@@ -969,50 +1168,87 @@ export function simulateGame(source: GameState, now = Date.now(), offline = fals
     const stepEnd = nextStepEnd(state, cursor, now);
     const seconds = (stepEnd - cursor) / 1_000;
 
-    if (state.weather !== 'mild' && stepEnd >= state.weatherUntil) state.weather = 'mild';
-
     state.properties.forEach((property) => {
-      accrueTaskRevenue(state, property, cursor, stepEnd);
-      accrueTaskEffect(property, stepEnd);
+      const activeTasks = [...property.tasks];
+      activeTasks.forEach((task) => {
+        accrueTaskRevenue(state, property, task, cursor, stepEnd);
+        accrueTaskEffect(property, task, stepEnd);
+      });
       advanceNaturalState(state, property, seconds);
-      if (property.task && property.task.endsAt <= stepEnd) completeTask(state, property, property.task.endsAt);
+      activeTasks.forEach((task) => {
+        if (task.endsAt <= stepEnd)
+          completeTask(state, property, task, task.endsAt);
+      });
       tryAutomation(state, property, stepEnd);
 
-      if (!property.protected && property.satisfaction <= 10 && !property.rescueUntil) {
-        property.rescueUntil = offline ? now + 10 * 60_000 : stepEnd + 10 * 60_000;
+      if (
+        !property.protected &&
+        property.satisfaction <= 10 &&
+        !property.rescueUntil
+      ) {
+        property.rescueUntil = offline
+          ? now + 10 * 60_000
+          : stepEnd + 10 * 60_000;
       }
     });
+    if (state.researchTask && state.researchTask.endsAt <= stepEnd) {
+      completeResearch(state, state.researchTask.endsAt);
+    }
+    // Der auslaufende Wetterabschnitt wirkt noch bis exakt zu seiner Grenze.
+    if (state.weather !== 'mild' && stepEnd >= state.weatherUntil)
+      state.weather = 'mild';
 
     if (!offline) {
       const lost = state.properties.filter(
-        (property) => !property.protected && property.rescueUntil && property.rescueUntil <= stepEnd,
+        (property) =>
+          !property.protected &&
+          property.rescueUntil &&
+          property.rescueUntil <= stepEnd,
       );
       lost.forEach((property) => {
-        addLog(state, `${property.name} hat den Pflegevertrag beendet.`, 'warning', stepEnd);
+        addLog(
+          state,
+          `${property.name} hat den Pflegevertrag beendet.`,
+          'warning',
+          stepEnd,
+        );
       });
       state.properties = state.properties.filter(
-        (property) => property.protected || !property.rescueUntil || property.rescueUntil > stepEnd,
+        (property) =>
+          property.protected ||
+          !property.rescueUntil ||
+          property.rescueUntil > stepEnd,
       );
     }
     cursor = stepEnd;
   }
 
   state.offers = state.offers.filter((offer) => offer.expiresAt > now);
-  if (now >= state.nextOfferAt && state.offers.length < 3) {
+  const tutorialActive = state.tutorialStep !== null;
+  if (!tutorialActive && now >= state.nextOfferAt && state.offers.length < 3) {
     const offer = createOffer(state, now);
     if (offer) state.offers.push(offer);
-    state.nextOfferAt = now + 2 * 60_000;
+    state.nextOfferAt = nextRandomOfferAt(now);
   }
 
-  if (now >= state.nextEventAt) {
+  if (
+    !tutorialActive &&
+    now >= state.nextEventAt &&
+    state.properties.length > 0
+  ) {
     triggerEvent(state, now);
     state.nextEventAt = now + (5 + Math.random() * 4) * 60_000;
   }
-  if (state.activeEvent && state.activeEvent.expiresAt <= now) state.activeEvent = undefined;
+  if (!tutorialActive) addLevelUpOffers(state, previousReputation, now);
+  if (state.activeEvent && state.activeEvent.expiresAt <= now)
+    state.activeEvent = undefined;
 
   state.lastUpdatedAt = now;
   const completed =
-    state.properties.reduce((sum, property) => sum + property.completedJobs, 0) - previousJobs;
+    state.properties.reduce(
+      (sum, property) => sum + property.completedJobs,
+      0,
+    ) - previousJobs;
   const summary: OfflineSummary = {
     elapsedMs,
     earned: Math.max(0, state.money - previousMoney),
@@ -1024,11 +1260,61 @@ export function simulateGame(source: GameState, now = Date.now(), offline = fals
   return { state, summary };
 }
 
-export function startTask(source: GameState, propertyId: string, kind: TaskKind): GameResult {
+export function taskUsesWorker(task: PropertyTask) {
+  return task.usesWorker ?? task.blocksPlayer ?? !task.automated;
+}
+
+export interface WorkerAssignment {
+  workerId: number;
+  propertyId?: string;
+  propertyName?: string;
+  task?: PropertyTask;
+  researchTask?: ResearchTask;
+}
+
+export function workerAssignments(state: GameState): WorkerAssignment[] {
+  const assignments = Array.from({ length: state.workers }, (_, workerId) => ({
+    workerId,
+  })) as WorkerAssignment[];
+  state.properties.forEach((property) => {
+    property.tasks.forEach((task) => {
+      if (!taskUsesWorker(task) || task.workerId === undefined) return;
+      assignments[task.workerId] = {
+        workerId: task.workerId,
+        propertyId: property.id,
+        propertyName: property.name,
+        task,
+      };
+    });
+  });
+  if (state.researchTask) {
+    assignments[state.researchTask.workerId] = {
+      workerId: state.researchTask.workerId,
+      researchTask: state.researchTask,
+    };
+  }
+  return assignments;
+}
+
+export function availableWorkerId(state: GameState) {
+  return workerAssignments(state).find(
+    (assignment) => !assignment.task && !assignment.researchTask,
+  )?.workerId;
+}
+
+export function startTask(
+  source: GameState,
+  propertyId: string,
+  kind: TaskKind,
+): GameResult {
   const state = clone(source);
   const property = state.properties.find((item) => item.id === propertyId);
   if (!property) return { state, message: 'Grundstück nicht gefunden.' };
-  if (property.task) return { state, message: 'Auf diesem Grundstück läuft bereits eine Aufgabe.' };
+  if (property.tasks.some((task) => task.kind === kind))
+    return {
+      state,
+      message: 'Diese Aufgabe läuft auf dem Grundstück bereits.',
+    };
   if (isBroken(property, kind)) {
     const name = EQUIPMENT[kind][property.equipment[kind]].name;
     return { state, message: `${name} ist ausgefallen — erst reparieren.` };
@@ -1036,10 +1322,13 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
 
   const equipment = EQUIPMENT[kind][property.equipment[kind]];
   const automated = Boolean(equipment.automated);
-  const blocksPlayer = !automated && !equipment.handsFree;
-  const manualBusy = state.properties.some((item) => item.task && taskBlocksPlayer(item.task));
-  if (blocksPlayer && manualBusy) {
-    return { state, message: 'Du bist bereits mit einer manuellen Aufgabe beschäftigt.' };
+  const usesWorker = !automated && !equipment.handsFree;
+  const workerId = usesWorker ? availableWorkerId(state) : undefined;
+  if (usesWorker && workerId === undefined) {
+    return {
+      state,
+      message: 'Alle Mitarbeiter sind bereits beschäftigt.',
+    };
   }
   if (kind === 'mow' && property.grass <= GRASS_FLOOR) {
     return { state, message: 'Der Rasen ist bereits kurz genug.' };
@@ -1052,9 +1341,20 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
   }
 
   const cost = kind === 'maintain' ? maintenanceCost(property) : 0;
-  if (state.money < cost) return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  if (state.money < cost)
+    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   state.money -= cost;
-  property.task = createTask(property, kind, Date.now(), automated, blocksPlayer, cost);
+  property.tasks.push(
+    createTask(
+      property,
+      kind,
+      Date.now(),
+      automated,
+      usesWorker,
+      cost,
+      workerId,
+    ),
+  );
   addLog(state, `${property.name}: ${TASK_LABELS[kind]} gestartet.`, 'neutral');
   return { state };
 }
@@ -1064,19 +1364,27 @@ export function startTask(source: GameState, propertyId: string, kind: TaskKind)
  * anteilige Lohn bleiben; erstattet wird nur der noch nicht gearbeitete Teil
  * der Vorkasse. Die Boni am Ende — Zufriedenheit und Reputation — verfallen.
  */
-export function cancelTask(source: GameState, propertyId: string): GameResult {
+export function cancelTask(
+  source: GameState,
+  propertyId: string,
+  kind: TaskKind,
+): GameResult {
   const state = clone(source);
   const property = state.properties.find((item) => item.id === propertyId);
-  if (!property?.task) return { state, message: 'Hier läuft gerade keine Aufgabe.' };
-
-  const task = property.task;
+  const task = property?.tasks.find((entry) => entry.kind === kind);
+  if (!property || !task)
+    return { state, message: 'Hier läuft gerade keine Aufgabe.' };
   const now = Date.now();
   if (taskPhase(task, now) === 'wrapup') {
     return { state, message: 'Der Abschluss lässt sich nicht mehr abbrechen.' };
   }
 
   const { from, to } = taskWorkWindow(task);
-  const worked = clamp((Math.min(now, to) - from) / Math.max(1, to - from), 0, 1);
+  const worked = clamp(
+    (Math.min(now, to) - from) / Math.max(1, to - from),
+    0,
+    1,
+  );
   const refund = Math.round(task.cost * (1 - worked));
   state.money += refund;
 
@@ -1087,42 +1395,48 @@ export function cancelTask(source: GameState, propertyId: string): GameResult {
   task.workStartsAt = Math.min(from, task.workEndsAt);
   task.endsAt = now + taskWrapUpDuration(property, task.kind) * 1_000;
 
-  addLog(state, `${property.name}: ${TASK_LABELS[task.kind]} abgebrochen.`, 'warning');
+  addLog(
+    state,
+    `${property.name}: ${TASK_LABELS[task.kind]} abgebrochen.`,
+    'warning',
+  );
   return {
     state,
-    message: refund > 0 ? `Abgebrochen · ${formatMoney(refund)} zurück.` : 'Abgebrochen.',
+    message:
+      refund > 0
+        ? `Abgebrochen · ${formatMoney(refund)} zurück.`
+        : 'Abgebrochen.',
   };
-}
-
-export function taskBlocksPlayer(task: PropertyTask) {
-  return task.blocksPlayer ?? !task.automated;
 }
 
 export function acceptOffer(source: GameState, offerId: string): GameResult {
   const state = clone(source);
   const offer = state.offers.find((item) => item.id === offerId);
-  if (!offer) return { state, message: 'Dieses Angebot ist nicht mehr verfügbar.' };
+  if (!offer)
+    return { state, message: 'Dieses Angebot ist nicht mehr verfügbar.' };
+  const starter = offer.id === 'starter-bergmann';
   state.properties.push({
-    id: offer.id,
+    id: starter ? 'bergmann' : offer.id,
     name: offer.name,
-    subtitle: offer.subtitle,
+    subtitle: starter ? 'Dein erster Stammkunde' : offer.subtitle,
     type: offer.type,
     size: offer.size,
     payout: offer.payout,
     growthFactor: offer.growthFactor,
     drainage: offer.drainage,
     customerDemand: offer.customerDemand,
-    grass: 48 + Math.random() * 30,
-    moisture: 42 + Math.random() * 30,
-    condition: 88,
+    grass: starter ? 63 : 48 + Math.random() * 30,
+    moisture: starter ? 88 : 42 + Math.random() * 30,
+    condition: starter ? 94 : 88,
     satisfaction: 78,
     equipment: { mow: 0, water: 0, maintain: 0 },
     broken: { mow: false, water: false },
+    tasks: [],
     fertilizer: false,
     weedControl: false,
     lifetimeRevenue: 0,
     completedJobs: 0,
-    protected: false,
+    protected: starter,
   });
   const added = state.properties[state.properties.length - 1];
   added.satisfaction = satisfactionTarget(added);
@@ -1133,24 +1447,78 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
 
 export function declineOffer(source: GameState, offerId: string): GameResult {
   const state = clone(source);
+  if (offerId === 'starter-bergmann') {
+    return { state, message: 'Dieser erste Auftrag wartet auf deine Zusage.' };
+  }
   state.offers = state.offers.filter((offer) => offer.id !== offerId);
-  state.nextOfferAt = Math.min(state.nextOfferAt, Date.now() + 45_000);
+  state.nextOfferAt = Math.min(
+    state.nextOfferAt,
+    nextRandomOfferAt(Date.now()),
+  );
   return { state, message: 'Angebot abgelehnt. Bald erscheint ein neues.' };
+}
+
+export function hireWorker(source: GameState): GameResult {
+  const state = clone(source);
+  const upgrade = WORKER_UPGRADES.find(
+    (entry) => entry.workers === state.workers + 1,
+  );
+  if (!upgrade)
+    return { state, message: 'Dein Team ist bereits vollständig ausgebaut.' };
+  if (state.reputation < upgrade.reputation) {
+    return {
+      state,
+      message: `Dafür brauchst du Reputation ${upgrade.reputation}.`,
+    };
+  }
+  if (state.money < upgrade.cost)
+    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  state.money -= upgrade.cost;
+  state.workers = upgrade.workers;
+  addLog(state, `${state.workers}. Mitarbeiter eingestellt.`, 'good');
+  return {
+    state,
+    message: `Dein Betrieb hat jetzt ${state.workers} Mitarbeiter.`,
+  };
 }
 
 export function unlockEquipment(source: GameState, kind: TaskKind): GameResult {
   const state = clone(source);
   const nextLevel = state.unlocked[kind] + 1;
   const item = EQUIPMENT[kind][nextLevel];
-  if (!item) return { state, message: 'In diesem Bereich ist bereits alles erforscht.' };
+  if (!item)
+    return { state, message: 'In diesem Bereich ist bereits alles erforscht.' };
   if (state.reputation < item.reputation) {
-    return { state, message: `Dafür brauchst du Reputation ${item.reputation}.` };
+    return {
+      state,
+      message: `Dafür brauchst du Reputation ${item.reputation}.`,
+    };
   }
-  if (state.money < item.unlockCost) return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  if (state.money < item.unlockCost)
+    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  if (state.researchTask)
+    return { state, message: 'Es läuft bereits eine Weiterbildung.' };
+  const workerId = availableWorkerId(state);
+  if (workerId === undefined) {
+    return {
+      state,
+      message: 'Alle Mitarbeiter sind bereits beschäftigt.',
+    };
+  }
+  const now = Date.now();
+  const duration = researchDurationMs(item.reputation);
   state.money -= item.unlockCost;
-  state.unlocked[kind] = nextLevel;
-  addLog(state, `${item.name} wurde freigeschaltet.`, 'good');
-  return { state, message: `${item.name} kann jetzt angeschafft werden.` };
+  state.researchTask = {
+    kind,
+    name: item.name,
+    targetLevel: nextLevel,
+    startedAt: now,
+    endsAt: now + duration,
+    cost: item.unlockCost,
+    workerId,
+  };
+  addLog(state, `${item.name}: Lernen begonnen.`, 'neutral', now);
+  return { state };
 }
 
 export function installEquipment(
@@ -1161,17 +1529,28 @@ export function installEquipment(
   const state = clone(source);
   const property = state.properties.find((item) => item.id === propertyId);
   if (!property) return { state, message: 'Grundstück nicht gefunden.' };
-  const nextLevel = property.equipment[kind] + 1;
-  if (nextLevel > state.unlocked[kind]) {
-    return { state, message: 'Diese Technik muss zuerst global freigeschaltet werden.' };
+  const targetLevel = state.unlocked[kind];
+  if (targetLevel <= property.equipment[kind]) {
+    return {
+      state,
+      message: 'Diese Technik muss zuerst global freigeschaltet werden.',
+    };
   }
-  const item = EQUIPMENT[kind][nextLevel];
-  if (!item) return { state, message: 'Hier ist bereits die beste Technik installiert.' };
-  if (state.money < item.installCost) return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  const item = EQUIPMENT[kind][targetLevel];
+  if (!item)
+    return {
+      state,
+      message: 'Hier ist bereits die beste Technik installiert.',
+    };
+  if (state.money < item.installCost)
+    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   state.money -= item.installCost;
-  property.equipment[kind] = nextLevel;
+  property.equipment[kind] = targetLevel;
   addLog(state, `${property.name}: ${item.name} wurde installiert.`, 'good');
-  return { state, message: `${item.name} ist jetzt auf ${property.name} einsatzbereit.` };
+  return {
+    state,
+    message: `${item.name} ist jetzt auf ${property.name} einsatzbereit.`,
+  };
 }
 
 export function unlockChemistry(
@@ -1183,14 +1562,44 @@ export function unlockChemistry(
     kind === 'fertilizer'
       ? { name: 'Dünger', cost: 700, reputation: 8 }
       : { name: 'Unkrautpflege', cost: 1_200, reputation: 15 };
-  if (state.chemistryUnlocked[kind]) return { state, message: `${config.name} ist bereits freigeschaltet.` };
-  if (state.reputation < config.reputation) {
-    return { state, message: `Dafür brauchst du Reputation ${config.reputation}.` };
+  if (state.chemistryUnlocked[kind])
+    return { state, message: `${config.name} ist bereits freigeschaltet.` };
+  if (kind === 'weedControl' && !state.chemistryUnlocked.fertilizer) {
+    return {
+      state,
+      message: 'Schalte zuerst Dünger frei.',
+    };
   }
-  if (state.money < config.cost) return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  if (state.reputation < config.reputation) {
+    return {
+      state,
+      message: `Dafür brauchst du Reputation ${config.reputation}.`,
+    };
+  }
+  if (state.money < config.cost)
+    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  if (state.researchTask)
+    return { state, message: 'Es läuft bereits eine Weiterbildung.' };
+  const workerId = availableWorkerId(state);
+  if (workerId === undefined) {
+    return {
+      state,
+      message: 'Alle Mitarbeiter sind bereits beschäftigt.',
+    };
+  }
+  const now = Date.now();
+  const duration = researchDurationMs(config.reputation);
   state.money -= config.cost;
-  state.chemistryUnlocked[kind] = true;
-  return { state, message: `${config.name} wurde freigeschaltet.` };
+  state.researchTask = {
+    kind,
+    name: config.name,
+    startedAt: now,
+    endsAt: now + duration,
+    cost: config.cost,
+    workerId,
+  };
+  addLog(state, `${config.name}: Lernen begonnen.`, 'neutral', now);
+  return { state };
 }
 
 export function installChemistry(
@@ -1201,10 +1610,16 @@ export function installChemistry(
   const state = clone(source);
   const property = state.properties.find((item) => item.id === propertyId);
   if (!property) return { state, message: 'Grundstück nicht gefunden.' };
-  if (!state.chemistryUnlocked[kind]) return { state, message: 'Diese Behandlung ist noch nicht freigeschaltet.' };
-  if (property[kind]) return { state, message: 'Auf diesem Grundstück bereits aktiv.' };
+  if (!state.chemistryUnlocked[kind])
+    return {
+      state,
+      message: 'Diese Behandlung ist noch nicht freigeschaltet.',
+    };
+  if (property[kind])
+    return { state, message: 'Auf diesem Grundstück bereits aktiv.' };
   const cost = kind === 'fertilizer' ? 110 : 180;
-  if (state.money < cost) return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
+  if (state.money < cost)
+    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   state.money -= cost;
   property[kind] = true;
   return {
@@ -1217,38 +1632,42 @@ export function resolveEvent(source: GameState): GameResult {
   const state = clone(source);
   const event = state.activeEvent;
   if (!event) return { state };
+  const previousReputation = state.reputation;
   if (event.type === 'mole' && event.propertyId) {
-    const property = state.properties.find((item) => item.id === event.propertyId);
+    const property = state.properties.find(
+      (item) => item.id === event.propertyId,
+    );
     if (property) property.satisfaction = clamp(property.satisfaction + 6);
     state.reputation += 0.5;
   }
+  addLevelUpOffers(state, previousReputation, Date.now());
   state.activeEvent = undefined;
   // Das Ereignis verschwindet sichtbar — eine zusaetzliche Meldung waere Laerm.
   return { state };
 }
 
-export function nextUnlockReputation(reputation: number) {
-  const thresholds = [2, 3, 5, 6, 7, 8, 14, 15, 18, 22, 24, 28, 32, 38];
-  return thresholds.find((threshold) => threshold > reputation) ?? Math.ceil(reputation / 10) * 10 + 10;
-}
-
 export function propertyStatus(property: GardenProperty) {
-  if (property.rescueUntil) return { label: 'Kritisch', tone: 'danger' as const };
-  if (isBroken(property)) return { label: 'Defekt', tone: 'danger' as const };
-  if (property.condition < 50 || property.satisfaction <= 25) {
-    return { label: 'Achtung', tone: 'warning' as const };
+  if (property.rescueUntil || property.satisfaction <= 25) {
+    return { label: 'Kritisch', tone: 'danger' as const };
   }
-  if (property.task) {
-    const phase = taskPhase(property.task);
-    const label =
-      phase === 'setup' ? 'Vorbereiten' : phase === 'wrapup' ? 'Abschluss' : 'In Arbeit';
-    return { label, tone: 'info' as const };
+  if (property.tasks.length > 0)
+    return { label: 'In Arbeit', tone: 'info' as const };
+  if (isBroken(property))
+    return { label: 'Blockiert', tone: 'danger' as const };
+  if (
+    property.condition < 50 ||
+    property.moisture < 50 ||
+    property.grass >= 60
+  ) {
+    return { label: 'Fällig', tone: 'warning' as const };
   }
-  if (property.grass >= 60) return { label: 'Mähbereit', tone: 'good' as const };
-  return { label: 'Im Plan', tone: 'neutral' as const };
+  return { label: 'Gepflegt', tone: 'good' as const };
 }
 
-export function propertyMetricPercent(property: GardenProperty, kind: TaskKind) {
+export function propertyMetricPercent(
+  property: GardenProperty,
+  kind: TaskKind,
+) {
   if (kind === 'mow') {
     return Math.min(100, Math.max(0, ((150 - property.grass) / 130) * 100));
   }
@@ -1266,9 +1685,7 @@ export function grassHint(value: number) {
 export function moistureHint(value: number) {
   if (value < 25) return 'Vertrocknet';
   if (value < 60) return 'Trocken';
-  if (value <= 100) return 'Optimal gewässert';
-  if (value <= 115) return 'Zu nass';
-  return 'Gefahr von Staunässe';
+  return 'Optimal gewässert';
 }
 
 /** Die Schwellen folgen `failureRisk`: ab 70 ist ein Ausfall ausgeschlossen. */
@@ -1293,6 +1710,11 @@ export function formatDuration(milliseconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/** Lernzeiten bleiben kurz genug für eine Spielsitzung, steigen aber mit der Wissensstufe. */
+export function researchDurationMs(reputation: number) {
+  return (20 + reputation * 2) * 1_000;
 }
 
 export function humanOfflineDuration(milliseconds: number) {

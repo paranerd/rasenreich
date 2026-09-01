@@ -24,13 +24,6 @@
   }
 }
 
-/// Nur mobil sichtbar — das Gegenstück zu `lg`.
-@mixin below-lg {
-  @media (max-width: 63.999rem) {
-    @content;
-  }
-}
-
 @mixin truncate {
   min-width: 0;
   overflow: hidden;

@@ -34,7 +34,7 @@ function createMemoryStorage(): SaveStorage {
 
 function isLocalStorageUsable(): boolean {
   try {
-    const probe = '__gg_probe__';
+    const probe = '__rasenreich_probe__';
     window.localStorage.setItem(probe, probe);
     window.localStorage.removeItem(probe);
     return true;

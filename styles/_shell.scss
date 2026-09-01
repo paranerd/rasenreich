@@ -49,7 +49,7 @@
   }
 }
 
-/// Ganzseitige Ansichten (Angebote, Technik) scrollen für sich.
+/// Ganzseitige Ansichten (Angebote, Upgrades) scrollen für sich.
 .app__scroll {
   flex: 1;
   min-height: 0;
@@ -105,19 +105,14 @@
 }
 
 .header__brand {
-  display: flex;
-  gap: 10px;
-  align-items: center;
   width: fit-content;
   border-radius: var(--radius-lg);
 }
 
-.header__logo {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  background: var(--logo-stripes);
-  border-radius: var(--radius-xs);
+.header__left {
+  display: flex;
+  gap: 14px;
+  align-items: center;
 }
 
 .header__wordmark {
@@ -149,21 +144,28 @@
   color: var(--ink);
 }
 
-.header__aside {
+.header__right {
   display: flex;
-  gap: 16px;
   align-items: center;
   justify-content: flex-end;
 }
 
-// ------------------------------------------------------------- Arbeitsstatus
+// ---------------------------------------------------------- Mitarbeiterstatus
 
-.activity {
+.workers {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  padding: 4px 6px;
-  border-radius: var(--radius);
+  justify-content: center;
+}
+
+.worker-status {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 52px;
+  padding: 4px 5px;
+  border-radius: var(--radius-xs);
   transition: background-color 0.15s;
 
   &:hover:not(:disabled) {
@@ -171,27 +173,31 @@
   }
 }
 
-.activity__dot {
+.worker-status__dot {
   flex-shrink: 0;
   width: 8px;
   height: 8px;
   background: var(--idle);
   border-radius: 999px;
-
-  .activity--busy & {
-    background: var(--busy);
-  }
 }
 
-.activity__state {
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--ink-soft);
-  white-space: nowrap;
+.worker-status--mow .worker-status__dot {
+  background: var(--kind-grass);
 }
 
-.activity__time {
+.worker-status--water .worker-status__dot {
+  background: var(--kind-water);
+}
+
+.worker-status--maintain .worker-status__dot {
+  background: var(--kind-cond);
+}
+
+.worker-status--research .worker-status__dot {
+  background: var(--rep);
+}
+
+.worker-status__time {
   @include num;
 
   font-size: 11.5px;
@@ -210,6 +216,33 @@
   width: 30px;
   height: 30px;
   place-items: center;
+  border-radius: 999px;
+  transition:
+    background-color 0.15s,
+    transform 0.15s;
+
+  &:hover {
+    background: var(--hover);
+    transform: scale(1.06);
+  }
+}
+
+@keyframes reputation-level-up {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+  45% {
+    filter: drop-shadow(
+      0 0 6px color-mix(in oklab, var(--rep) 70%, transparent)
+    );
+    transform: scale(1.18);
+  }
+}
+
+.rep--level-up {
+  animation: reputation-level-up 700ms ease-out;
 }
 
 .rep__svg {
@@ -234,6 +267,15 @@
   width: 28px;
   height: 28px;
   place-items: center;
+  border-radius: 999px;
+  transition:
+    background-color 0.15s,
+    transform 0.15s;
+
+  &:hover {
+    background: var(--hover);
+    transform: scale(1.06);
+  }
 
   svg {
     width: 20px;
@@ -243,7 +285,7 @@
 
 // ---------------------------------------------------------------- Kopf mobil
 
-/// Vermögen als größte Zahl, darunter die Aktivität, daneben Wetter und Ruf.
+/// Vermögen als größte Zahl, darunter die Aktivität, links Wetter und rechts Ruf.
 .mobile-header {
   position: relative;
   display: flex;
@@ -262,37 +304,12 @@
   }
 }
 
-.mobile-header__back {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  display: grid;
-  width: 44px;
-  height: 44px;
-  color: var(--primary);
-  border-radius: var(--radius);
-  place-items: center;
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-.mobile-header__logo {
-  position: absolute;
-  top: 14px;
-  left: 16px;
-  width: 26px;
-  height: 26px;
-  background: var(--logo-stripes);
-  border-radius: var(--radius);
-}
-
 .mobile-header__weather {
   position: absolute;
-  top: 12px;
-  right: 16px;
+  top: 0;
+  bottom: 0;
+  left: 16px;
+  margin-block: auto;
 }
 
 .mobile-header__label {
@@ -325,8 +342,12 @@
 
 .mobile-header__rep {
   position: absolute;
+  top: 0;
   right: 16px;
-  bottom: 12px;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  margin-block: auto;
 }
 
 // ---------------------------------------------------------------- Navigation
@@ -369,6 +390,32 @@
       color: var(--ink-soft);
     }
   }
+}
+
+.nav-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.nav-indicator {
+  @include num;
+
+  position: absolute;
+  top: -8px;
+  right: -12px;
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--primary-contrast);
+  background: var(--destructive);
+  border: 2px solid var(--paper);
+  border-radius: 999px;
+  place-items: center;
 }
 
 .sidenav__item--active {
@@ -451,4 +498,10 @@
   font-weight: 600;
   line-height: 1;
   color: var(--ink-mute);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rep--level-up {
+    animation: none;
+  }
 }

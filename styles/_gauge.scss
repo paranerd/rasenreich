@@ -1,9 +1,7 @@
 @use 'mixins' as *;
 
 /// Die Füllung trägt denselben Zustands-Ton wie die Prozentzahl daneben; die
-/// Farbe kommt deshalb aus der Komponente. Der Balken endet bei 100 %, der
-/// abgelesene Wert nicht: Regen kann die Feuchtigkeit darüber treiben, und das
-/// soll sichtbar bleiben.
+/// Farbe kommt deshalb aus der Komponente. Der Balken endet bei 100 %.
 .gauge {
   display: flex;
   flex-direction: column;
@@ -16,6 +14,30 @@
   gap: 8px;
   align-items: baseline;
   justify-content: space-between;
+}
+
+.gauge__title {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.gauge__metric-icon {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+}
+
+.gauge__metric-icon--mow {
+  color: var(--kind-grass);
+}
+
+.gauge__metric-icon--water {
+  color: var(--kind-water);
+}
+
+.gauge__metric-icon--maintain {
+  color: var(--kind-cond);
 }
 
 .gauge__label {
@@ -47,8 +69,21 @@
 
 /// Zeilenvariante der Desktop-Liste: nur der nackte Balken.
 .gauge--mini {
-  display: block;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+  height: 9px;
+}
+
+.gauge__mini-icon {
+  width: 9px;
+  height: 9px;
+}
+
+.gauge__mini-track {
   position: relative;
+  flex: 1;
   height: 3px;
   overflow: hidden;
   background: var(--track);
@@ -83,6 +118,17 @@
   line-height: 1;
   color: var(--ink);
   place-items: center;
+}
+
+.gauge__dial-icon {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  padding: 1px;
+  background: var(--paper);
+  transform: translateX(-50%);
 }
 
 .gauge__foot {

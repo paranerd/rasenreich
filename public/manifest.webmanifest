@@ -1,0 +1,27 @@
+{
+  "id": "./",
+  "name": "Rasenreich",
+  "short_name": "Rasenreich",
+  "description": "Baue deinen eigenen Rasenpflegebetrieb auf.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f0e7",
+  "theme_color": "#f3f0e7",
+  "categories": ["games", "simulation"],
+  "icons": [
+    {
+      "src": "assets/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

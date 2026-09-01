@@ -6,6 +6,7 @@ Der Spieler ist freiberuflicher Gartenlandschaftsbauer, spezialisiert auf Rasenp
 Zu Beginn des Spiels bekommt er einen ersten Auftrag für ein kleines Grundstück.
 
 Der Spieler hat 3 Aufgaben:
+
 - Mähen
 - Bewässern
 - Wartung
@@ -53,12 +54,18 @@ Beispiel:
 
 ## Manuell vs Automatisiert
 
-Zunächst macht der Spieler alles manuell. Mähen, wässern und reparieren. Wenn er auf einem Grundstück mäht, ist er „blockiert“ und kann z.B. nicht auf einem weiteren Grundstück wässern.
+Der Spieler leitet den Betrieb als Geschäftsführer und weist die Arbeiten seinen Mitarbeitern zu. Der Betrieb beginnt mit einem Mitarbeiter und kann über Upgrades auf höchstens vier Mitarbeiter erweitert werden. Jeder Mitarbeiter kann gleichzeitig eine manuelle Arbeit oder eine Weiterbildung übernehmen.
 
-Über Upgrades können diese Aufgaben automatisiert werden, sodass sie parallel laufen können.
+Auf einem Grundstück dürfen Mähen, Bewässern und Wartung parallel laufen; dieselbe Aufgabenart kann dort aber nicht mehrfach gleichzeitig gestartet werden.
+
+Freihändige und automatische Technik belegt keinen Mitarbeiter. Vollautomatische Technik startet eine Aufgabe zusätzlich selbstständig, sobald Bedarf entsteht.
 
 ## Upgrades
 
+- Mitarbeiter
+  - 2. Mitarbeiter: Reputation 5, 500 €
+  - 3. Mitarbeiter: Reputation 15, 2.500 €
+  - 4. Mitarbeiter: Reputation 30, 10.000 €
 - Chemie
   - Dünger (Rasen wächst schneller)
   - Unkrautvernichter
@@ -102,10 +109,12 @@ Es können verschiedene Ereignisse auftreten, die die Arbeit positiv oder negati
 ## Wechselwirkungen
 
 Beispiele:
+
 - Nassen Rasen mähen → längere Dauer, **doppelter** Geräteverschleiß
 - Dünger → Wachstum ×1,5, Wasserbedarf ×1,3
 - Vertrockneter Rasen → Wachstum halbiert, also seltener Mähgeld
 - Mähroboter auf zu langem Gras → höheres Ausfallrisiko
+
 ## UI
 
 Der Hauptbildschirm des Spiels soll möglichst „scrollfrei“ sein. Einzelne Elemente können aber natürlich scrollen.

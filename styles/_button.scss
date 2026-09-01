@@ -44,6 +44,16 @@
   }
 }
 
+/// Forschungsaktionen folgen der Aktionslogik: verfügbar kräftig grün,
+/// gesperrt oder nicht leistbar neutral statt nur transparent ausgeblendet.
+.btn--unlock:disabled,
+.btn--unlock:disabled:hover {
+  color: var(--ink-faint);
+  background: var(--paper);
+  border-color: var(--border);
+  opacity: 1;
+}
+
 .btn--outline {
   color: var(--ink);
   background: var(--surface);

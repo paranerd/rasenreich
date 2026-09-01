@@ -280,6 +280,9 @@
 }
 
 .action {
+  --action-kind: var(--kind-grass);
+  --action-contrast: var(--primary-contrast);
+
   position: relative;
   display: flex;
   flex: 1;
@@ -290,9 +293,9 @@
   min-height: 56px;
   padding: 10px 6px;
   overflow: hidden;
-  color: var(--primary);
+  color: var(--action-kind);
   background: var(--paper);
-  border: 1px solid var(--primary-line);
+  border: 1px solid color-mix(in oklab, var(--action-kind) 42%, transparent);
   border-radius: var(--radius);
   transition:
     background-color 0.12s,
@@ -305,12 +308,12 @@
   /// — und die empfohlene, die schon grün gefüllt ist. Beide bringen ihren
   /// eigenen Hover mit; ohne die Ausnahme gewinnt diese Regel über Spezifität.
   &:hover:not(:disabled):not(.action--running):not(.action--on) {
-    background: var(--highlight);
-    border-color: var(--primary-line-strong);
+    background: color-mix(in oklab, var(--action-kind) 10%, var(--paper));
+    border-color: color-mix(in oklab, var(--action-kind) 62%, transparent);
   }
 
   &:active:not(:disabled):not(.action--running):not(.action--on) {
-    background: var(--highlight-hover);
+    background: color-mix(in oklab, var(--action-kind) 17%, var(--paper));
   }
 
   /// Auch auf dem Touchscreen soll der Druck sichtbar sein.
@@ -322,6 +325,19 @@
     color: var(--ink-faint);
     border-color: var(--border);
   }
+}
+
+.action--mow {
+  --action-kind: var(--kind-grass);
+}
+
+.action--water {
+  --action-kind: var(--kind-water);
+}
+
+.action--maintain {
+  --action-kind: var(--kind-cond);
+  --action-contrast: #3c2d0b;
 }
 
 .action--compact {
@@ -336,10 +352,9 @@
 /// Die laufende Aktion bleibt bedienbar — ein Klick bricht sie ab — und trägt
 /// ihren Fortschritt als Fläche, die über die Laufzeit leerläuft.
 .action--running {
-  color: var(--primary);
+  color: var(--action-kind);
   background: var(--paper);
-  border-color: var(--primary-line-strong);
-
+  border-color: color-mix(in oklab, var(--action-kind) 64%, transparent);
 }
 
 /// Der Griff zum Abbrechen darf sich als solcher anfühlen — aber nur über
@@ -361,17 +376,17 @@
 
 /// Die eine wirklich fällige Aktion.
 .action--on {
-  color: var(--primary-contrast);
-  background: var(--primary);
-  border-color: var(--primary);
+  color: var(--action-contrast);
+  background: var(--action-kind);
+  border-color: var(--action-kind);
 
   &:hover:not(:disabled) {
-    background: color-mix(in oklab, var(--primary) 88%, #000);
-    border-color: color-mix(in oklab, var(--primary) 88%, #000);
+    background: color-mix(in oklab, var(--action-kind) 88%, #000);
+    border-color: color-mix(in oklab, var(--action-kind) 88%, #000);
   }
 
   &:active:not(:disabled) {
-    background: color-mix(in oklab, var(--primary) 78%, #000);
+    background: color-mix(in oklab, var(--action-kind) 78%, #000);
   }
 }
 
@@ -412,7 +427,7 @@
   }
 
   .action--on & {
-    color: rgba(255, 253, 247, 0.82);
+    color: color-mix(in oklab, var(--action-contrast) 78%, transparent);
   }
 }
 
@@ -421,7 +436,7 @@
   position: absolute;
   inset-block: 0;
   left: 0;
-  background: var(--secondary);
+  background: color-mix(in oklab, var(--action-kind) 24%, var(--paper));
   transition: width 0.2s linear;
 }
 
@@ -480,21 +495,61 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  min-height: 44px;
-  padding: 0 13px;
+  justify-content: center;
+  width: 94px;
+  height: 44px;
+  padding: 0 6px;
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1;
-  color: var(--primary);
+  color: var(--paper);
   white-space: nowrap;
-  background: var(--surface);
-  border: 1px solid var(--primary-line-soft);
+  background: var(--primary);
+  border: 1px solid var(--primary);
   border-radius: var(--radius);
+  text-align: center;
 
   &:disabled {
     color: var(--ink-faint);
+    background: var(--surface);
     border-color: var(--border);
   }
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+}
+
+.shelf-row__research {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 94px;
+  height: 44px;
+  padding: 0 6px;
+  color: var(--primary);
+  background: var(--paper);
+  border: 1px solid var(--primary-line);
+  border-radius: var(--radius);
+  text-align: center;
+
+  &:hover {
+    background: var(--highlight);
+    border-color: var(--primary-line-strong);
+  }
+
+  svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+.shelf-button__mobile {
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 
 .shelf-cards {
@@ -518,6 +573,10 @@
   border-radius: var(--radius);
 }
 
+.shelf-card--empty {
+  border-style: dashed;
+}
+
 .shelf-card__kind {
   @include label(9px, 0.12em);
 
@@ -537,56 +596,63 @@
   color: var(--ink-mute);
 }
 
-.shelf-card__lock {
-  @include num;
-
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--ink-mute);
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-}
-
 .shelf-card__buy {
   @include num;
 
   display: flex;
+  gap: 6px;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: 38px;
   margin-top: auto;
-  padding: 10px 12px;
+  padding: 0 10px;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  color: var(--primary);
-  background: var(--paper);
-  border: 1px solid var(--primary-line);
+  color: var(--paper);
+  background: var(--primary);
+  border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
+  text-align: center;
   transition: background-color 0.15s;
 
   &:disabled {
     color: var(--ink-faint);
+    background: var(--surface);
     border-color: var(--border);
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
   }
 }
 
-.shelf-card__done {
+.shelf-card__research {
   display: flex;
   gap: 6px;
   align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 38px;
+  margin-top: auto;
+  padding: 0 10px;
   font-size: 11px;
-  line-height: 1.4;
-  color: var(--ink-mute);
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--paper);
+  border: 1px solid var(--primary-line);
+  border-radius: var(--radius-sm);
+  text-align: center;
+
+  &:hover {
+    background: var(--highlight);
+    border-color: var(--primary-line-strong);
+  }
 
   svg {
     width: 14px;
     height: 14px;
-    color: var(--primary);
   }
 }
