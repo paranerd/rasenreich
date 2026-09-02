@@ -14,6 +14,7 @@ import {
   FlaskConical,
   LayoutDashboard,
   LockKeyhole,
+  RefreshCw,
   RotateCcw,
   Settings2,
   ShoppingBag,
@@ -28,12 +29,14 @@ import {
 
 import { Button } from '@/components/button';
 import { Gauge, metricToneColor } from '@/components/gauge';
+import { usePwaUpdate } from '@/components/pwa-update';
 import { Tutorial } from '@/components/tutorial';
 import { Toast, useGame } from '@/hooks/use-game';
 import {
   ACTION_LABELS,
   availableWorkerId,
   EQUIPMENT,
+  equipmentCondition,
   EquipmentLevel,
   formatDuration,
   formatMoney,
@@ -114,7 +117,7 @@ function satisfactionColorOnImage(value: number) {
  */
 function recommendedTask(property: GardenProperty): TaskKind | undefined {
   if (isBroken(property)) return 'maintain';
-  if (property.condition < 35) return 'maintain';
+  if (equipmentCondition(property) < 35) return 'maintain';
   if (property.moisture < 50) return 'water';
   if (property.grass >= 60) return 'mow';
   return undefined;
@@ -124,6 +127,15 @@ function recommendedTask(property: GardenProperty): TaskKind | undefined {
 function urgentTaskHint(property: GardenProperty) {
   if (property.rescueUntil)
     return 'Hier ist jetzt deine volle Aufmerksamkeit gefragt';
+  if (
+    property.automationIntervention &&
+    !property.automationIntervention.endsAt
+  )
+    return property.automationIntervention.kind === 'mow'
+      ? 'Der Mähroboter wartet auf kurze Hilfe'
+      : 'Die Bewässerungsanlage wartet auf kurze Hilfe';
+  if (property.automationIntervention)
+    return 'Ein Mitarbeiter kümmert sich gerade um die Automatik';
   if (property.tasks.length > 1) return 'Hier laufen mehrere Arbeiten parallel';
   const running = property.tasks[0];
   if (running) {
@@ -224,7 +236,16 @@ function propertyFlags(property: GardenProperty) {
       tone: 'danger',
       label: 'Gerät ausgefallen',
     });
-  } else if (property.condition < 45) {
+  } else if (property.automationIntervention) {
+    flags.push({
+      id: 'robot',
+      Icon: CircleAlert,
+      tone: property.automationIntervention.endsAt ? 'warning' : 'danger',
+      label: property.automationIntervention.endsAt
+        ? 'Automatik wird geprüft'
+        : 'Automatik braucht Hilfe',
+    });
+  } else if (equipmentCondition(property) < 45) {
     flags.push({
       id: 'wear',
       Icon: Wrench,
@@ -361,36 +382,43 @@ function ReputationRing({
   );
 }
 
-function availableUpgradeCount(game: GameState) {
-  const workerUpgrade = WORKER_UPGRADES.find(
-    (entry) => entry.workers === game.workers + 1,
-  );
-  const workerCount =
-    workerUpgrade &&
-    game.reputation >= workerUpgrade.reputation &&
-    game.money >= workerUpgrade.cost
+function availableUpgradeCountForTab(game: GameState, tab: UpgradeTabId) {
+  if (tab === 'workers') {
+    const upgrade = WORKER_UPGRADES.find(
+      (entry) => entry.workers === game.workers + 1,
+    );
+    return upgrade &&
+      game.reputation >= upgrade.reputation &&
+      game.money >= upgrade.cost
       ? 1
       : 0;
-  if (game.researchTask) return workerCount;
-  const equipmentCount = KINDS.filter((kind) => {
-    const nextUnlock = EQUIPMENT[kind][game.unlocked[kind] + 1];
-    return (
-      nextUnlock &&
-      game.reputation >= nextUnlock.reputation &&
-      game.money >= nextUnlock.unlockCost
-    );
-  }).length;
-  const careCount = [
-    { id: 'fertilizer' as const, reputation: 8, cost: 700 },
-    { id: 'weedControl' as const, reputation: 15, cost: 1_200 },
-  ].filter(
-    (item) =>
-      !game.chemistryUnlocked[item.id] &&
-      (item.id === 'fertilizer' || game.chemistryUnlocked.fertilizer) &&
-      game.reputation >= item.reputation &&
-      game.money >= item.cost,
-  ).length;
-  return workerCount + equipmentCount + careCount;
+  }
+
+  if (tab === 'care') {
+    const next = !game.chemistryUnlocked.fertilizer
+      ? { id: 'fertilizer' as const, reputation: 8 }
+      : !game.chemistryUnlocked.weedControl
+        ? { id: 'weedControl' as const, reputation: 15 }
+        : undefined;
+    if (next && game.researchTask?.kind === next.id) return 0;
+    return next && game.reputation >= next.reputation ? 1 : 0;
+  }
+
+  const next = EQUIPMENT[tab][game.unlocked[tab] + 1];
+  if (
+    game.researchTask?.kind === tab &&
+    game.researchTask.targetLevel === game.unlocked[tab] + 1
+  )
+    return 0;
+  return next && game.reputation >= next.reputation ? 1 : 0;
+}
+
+function availableUpgradeCount(game: GameState) {
+  const tabs: UpgradeTabId[] = [...KINDS, 'workers', 'care'];
+  return tabs.reduce(
+    (sum, tab) => sum + availableUpgradeCountForTab(game, tab),
+    0,
+  );
 }
 
 /** Ein kompakter Status pro Mitarbeiter — ohne Bezeichnung, nur Punkt und Zeit. */
@@ -408,14 +436,20 @@ function WorkerStatuses({
       {assignments.map((assignment) => {
         const task = assignment.task;
         const research = assignment.researchTask;
-        const active = Boolean(task || research);
-        const end = task?.endsAt ?? research?.endsAt;
-        const tone = task?.kind ?? (research ? 'research' : 'idle');
-        const title = research
-          ? `Mitarbeiter ${assignment.workerId + 1}: ${research.name} wird gelernt`
-          : task
-            ? `Mitarbeiter ${assignment.workerId + 1}: ${taskPhaseLabel(task)} bei ${assignment.propertyName}`
-            : `Mitarbeiter ${assignment.workerId + 1}: frei`;
+        const automationIntervention = assignment.automationIntervention;
+        const active = Boolean(task || research || automationIntervention);
+        const end =
+          task?.endsAt ?? research?.endsAt ?? automationIntervention?.endsAt;
+        const tone =
+          task?.kind ??
+          (research ? 'research' : (automationIntervention?.kind ?? 'idle'));
+        const title = automationIntervention
+          ? `Mitarbeiter ${assignment.workerId + 1}: Automatik bei ${assignment.propertyName} prüfen`
+          : research
+            ? `Mitarbeiter ${assignment.workerId + 1}: ${research.name} wird gelernt`
+            : task
+              ? `Mitarbeiter ${assignment.workerId + 1}: ${taskPhaseLabel(task)} bei ${assignment.propertyName}`
+              : `Mitarbeiter ${assignment.workerId + 1}: frei`;
         return (
           <button
             key={assignment.workerId}
@@ -1141,14 +1175,18 @@ function ActionButtons({
     <div className="actions">
       {KINDS.map((kind) => {
         const equipment = EQUIPMENT[kind][property.equipment[kind]];
-        const usesWorker = !equipment.automated && !equipment.handsFree;
+        const usesWorker = !equipment.automated;
         const running = property.tasks.find((task) => task.kind === kind);
+        const automationPaused = property.automationIntervention?.kind === kind;
+        const progressAt = automationPaused
+          ? (property.automationIntervention?.pausedAt ?? now)
+          : now;
         const progress = running
           ? Math.min(
               100,
               Math.max(
                 0,
-                ((now - running.startedAt) /
+                ((progressAt - running.startedAt) /
                   (running.endsAt - running.startedAt)) *
                   100,
               ),
@@ -1157,10 +1195,12 @@ function ActionButtons({
         const broken = isBroken(property, kind);
         // Bis zum Abschluss bleibt die laufende Aufgabe bedienbar — ein Klick
         // bricht sie ab. Der Abschluss selbst läuft in jedem Fall zu Ende.
-        const cancellable = running
-          ? taskPhase(running, now) !== 'wrapup'
-          : false;
+        const cancellable =
+          running && !automationPaused
+            ? taskPhase(running, now) !== 'wrapup'
+            : false;
         const disabled =
+          Boolean(automationPaused) ||
           Boolean(running && !cancellable) ||
           (!running && ((usesWorker && !workerAvailable) || broken));
         // Die laufende Aktion traegt ihre eigene Darstellung, nicht die der Empfehlung.
@@ -1201,7 +1241,13 @@ function ActionButtons({
                   {cancellable && (
                     <X className="action__cancel" aria-hidden="true" />
                   )}
-                  {formatDuration(running.endsAt - now)}
+                  {automationPaused
+                    ? property.automationIntervention?.endsAt
+                      ? formatDuration(
+                          property.automationIntervention.endsAt - now,
+                        )
+                      : 'Pausiert'
+                    : formatDuration(running.endsAt - now)}
                 </>
               ) : compact && broken ? (
                 'Defekt'
@@ -1331,6 +1377,49 @@ function UpgradeShelf({
   );
 }
 
+function AutomationInterventionBanner({
+  property,
+  workerAvailable,
+  now,
+  onStart,
+}: {
+  property: GardenProperty;
+  workerAvailable: boolean;
+  now: number;
+  onStart: () => void;
+}) {
+  const intervention = property.automationIntervention;
+  if (!intervention) return null;
+  const active = Boolean(intervention.endsAt);
+  const mower = intervention.kind === 'mow';
+  return (
+    <div className="automation-help">
+      <CircleAlert className="automation-help__icon" aria-hidden="true" />
+      <div className="automation-help__body">
+        <p className="automation-help__title">
+          {active
+            ? 'Automatik wird geprüft'
+            : mower
+              ? 'Mähroboter braucht Hilfe'
+              : 'Bewässerungsanlage braucht Hilfe'}
+        </p>
+        <p className="automation-help__note">
+          {active && intervention.endsAt
+            ? `Kurzer Eingriff · noch ${formatDuration(intervention.endsAt - now)}`
+            : workerAvailable
+              ? 'Ein freier Mitarbeiter kann die Anlage in wenigen Sekunden wieder starten.'
+              : 'Sobald ein Mitarbeiter frei ist, kann die Anlage wieder gestartet werden.'}
+        </p>
+      </div>
+      {!active && (
+        <Button disabled={!workerAvailable} onClick={onStart}>
+          Automatik prüfen
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function PropertyDetail({
   game,
   property,
@@ -1338,6 +1427,7 @@ function PropertyDetail({
   onStart,
   onCancel,
   onInstall,
+  onAutomationIntervention,
   onOpenResearch,
 }: {
   game: GameState;
@@ -1346,6 +1436,7 @@ function PropertyDetail({
   onStart: (kind: TaskKind) => void;
   onCancel: (kind: TaskKind) => void;
   onInstall: (kind: TaskKind) => void;
+  onAutomationIntervention: () => void;
   onOpenResearch: () => void;
 }) {
   return (
@@ -1369,6 +1460,13 @@ function PropertyDetail({
           </div>
         </div>
       )}
+
+      <AutomationInterventionBanner
+        property={property}
+        workerAvailable={workerAvailable}
+        now={game.lastUpdatedAt}
+        onStart={onAutomationIntervention}
+      />
 
       <div className="panel">
         <div
@@ -1397,6 +1495,24 @@ function PropertyDetail({
                 />
               </div>
             ))}
+          </div>
+          <div className="condition-breakdown" aria-label="Gerätezustände">
+            {(['mow', 'water'] as const).map((kind) => {
+              const value = equipmentCondition(property, kind);
+              const broken = property.broken[kind];
+              return (
+                <span
+                  key={kind}
+                  className={`condition-breakdown__item ${broken ? 'condition-breakdown__item--broken' : value < 70 ? 'condition-breakdown__item--due' : ''}`}
+                  title={EQUIPMENT[kind][property.equipment[kind]].name}
+                >
+                  {kind === 'mow' ? 'Mäher' : 'Bewässerung'}{' '}
+                  <strong>
+                    {broken ? 'defekt' : `${Math.round(value)} %`}
+                  </strong>
+                </span>
+              );
+            })}
           </div>
         </div>
 
@@ -1648,23 +1764,55 @@ function equipmentBenefits(
   current: EquipmentLevel,
   next: EquipmentLevel,
 ) {
+  if (kind === 'mow') {
+    const benefits = [
+      {
+        label: `Mähgeschwindigkeit ${Math.round(100 / next.speed)} %`,
+        tradeoff: false,
+      },
+      {
+        label: `Zuverlässigkeit ${Math.round((next.reliability ?? 1) * 100)} %`,
+        tradeoff: false,
+      },
+      {
+        label: `Maximaler Pflegegrad ${next.maxCare ?? 100} %`,
+        tradeoff: false,
+      },
+    ];
+    if (next.automated)
+      benefits.push({ label: 'Automatisches Mähen', tradeoff: false });
+    return benefits;
+  }
+
+  if (kind === 'water') {
+    const benefits = [
+      {
+        label: `Bewässerungsgeschwindigkeit ${Math.round(100 / next.speed)} %`,
+        tradeoff: false,
+      },
+      {
+        label: `Maximaler Bewässerungsgrad ${next.maxWater ?? 100} %`,
+        tradeoff: false,
+      },
+      {
+        label: `Zuverlässigkeit ${Math.round((next.reliability ?? 1) * 100)} %`,
+        tradeoff: false,
+      },
+    ];
+    if (next.automated)
+      benefits.push({
+        label: 'Automatische Bewässerung',
+        tradeoff: false,
+      });
+    return benefits;
+  }
+
   const speedIncrease = Math.round((current.speed / next.speed - 1) * 100);
-  const speedLabel =
-    kind === 'mow'
-      ? 'Mähgeschwindigkeit'
-      : kind === 'water'
-        ? 'Bewässerungsgeschwindigkeit'
-        : 'Reparaturgeschwindigkeit';
   const speedBenefit = {
-    label: `${speedLabel} ${speedIncrease >= 0 ? '+' : '−'}${Math.abs(speedIncrease)} %`,
+    label: `Reparaturgeschwindigkeit ${speedIncrease >= 0 ? '+' : '−'}${Math.abs(speedIncrease)} %`,
     tradeoff: speedIncrease < 0,
   };
   const benefits = speedBenefit.tradeoff ? [] : [speedBenefit];
-  if (next.handsFree && !current.handsFree)
-    benefits.push({
-      label: 'Belegt nach dem Start keinen Mitarbeiter mehr',
-      tradeoff: false,
-    });
   if (next.automated && !current.automated)
     benefits.push({
       label: 'Startet bei Bedarf vollautomatisch',
@@ -1722,7 +1870,6 @@ const CARE_UPGRADES = [
     id: 'fertilizer' as const,
     name: 'Dünger',
     reputation: 8,
-    cost: 700,
     description:
       'Beschleunigt das Rasenwachstum, erhöht aber zugleich den Wasserbedarf.',
     effects: ['Rasenwachstum +50 %', 'Mehr mögliche Mäherträge'],
@@ -1731,7 +1878,6 @@ const CARE_UPGRADES = [
     id: 'weedControl' as const,
     name: 'Unkrautpflege',
     reputation: 15,
-    cost: 1_200,
     description:
       'Hält die Flächen sauber und erhöht den Ertrag jedes Schnitts.',
     effects: ['Mähertrag +8 %'],
@@ -1743,14 +1889,16 @@ function UpgradeActionButton({
   reputation,
   cost,
   duration,
+  remainingDuration,
   actionLabel,
   onClick,
   title,
 }: {
   status: UpgradeActionStatus;
   reputation: number;
-  cost: number;
+  cost?: number;
   duration?: number;
+  remainingDuration?: number;
   actionLabel: 'Freischalten' | 'Einstellen';
   onClick?: () => void;
   title?: string;
@@ -1761,17 +1909,21 @@ function UpgradeActionButton({
   let meta = '';
 
   if (available) {
-    Icon = actionLabel === 'Einstellen' ? UserPlus : Banknote;
-    label = formatMoney(cost);
-    meta = duration
-      ? `${actionLabel} · ${formatDuration(duration)}`
-      : actionLabel;
+    if (actionLabel === 'Einstellen') {
+      Icon = UserPlus;
+      label = 'Einstellen';
+      meta = formatMoney(cost ?? 0);
+    } else {
+      Icon = BookOpen;
+      label = 'Freischalten';
+      meta = duration ? formatDuration(duration) : '';
+    }
   } else if (status === 'sequence') {
     label = `Reputation ${reputation}`;
   } else if (status === 'funds') {
-    Icon = Banknote;
-    label = formatMoney(cost);
-    meta = 'Guthaben reicht noch nicht';
+    Icon = UserPlus;
+    label = 'Einstellen';
+    meta = formatMoney(cost ?? 0);
   } else if (status === 'busy') {
     Icon = BookOpen;
     label = 'Weiterbildung belegt';
@@ -1779,7 +1931,7 @@ function UpgradeActionButton({
   } else if (status === 'researching') {
     Icon = BookOpen;
     label = 'Wird gelernt';
-    meta = 'Freischaltung läuft';
+    meta = `Noch ${formatDuration(remainingDuration ?? 0)}`;
   } else if (status === 'unlocked') {
     Icon = Check;
     label = 'Freigeschaltet';
@@ -1806,14 +1958,12 @@ function UpgradeActionButton({
 function upgradeResearchStatus(
   game: GameState,
   reputation: number,
-  cost: number,
   isNext: boolean,
   isResearching: boolean,
 ): UpgradeActionStatus {
   if (isResearching) return 'researching';
   if (!isNext) return 'sequence';
   if (game.reputation < reputation) return 'reputation';
-  if (game.money < cost) return 'funds';
   if (game.researchTask || availableWorkerId(game) === undefined) return 'busy';
   return 'available';
 }
@@ -1829,7 +1979,7 @@ function UpgradeEffect({
     <div className="upgrade-effect">
       <span className="upgrade-effect__description">{description}</span>
       {effects.length > 0 && (
-        <ul className="upgrade-effect__list" aria-label="Effekte">
+        <ul className="upgrade-effect__list" aria-label="Features">
           {effects.map((effect) => (
             <li key={effect}>
               <Sparkles aria-hidden="true" /> {effect}
@@ -1876,6 +2026,7 @@ function UpgradesView({
       <nav className="upgrade-tabs" aria-label="Upgrade-Bereiche">
         {UPGRADE_TABS.map(({ id, label, Icon }) => {
           const [current, total] = tabProgress(id);
+          const available = availableUpgradeCountForTab(game, id);
           return (
             <button
               key={id}
@@ -1884,8 +2035,16 @@ function UpgradesView({
               aria-current={activeTab === id ? 'page' : undefined}
               onClick={() => setActiveTab(id)}
             >
-              <span className="upgrade-tab__icon" aria-hidden="true">
-                <Icon />
+              <span className="upgrade-tab__icon">
+                <Icon aria-hidden="true" />
+                {available > 0 && (
+                  <span
+                    className="nav-indicator upgrade-tab__indicator"
+                    aria-label={`${available} ${available === 1 ? 'verfügbares Upgrade' : 'verfügbare Upgrades'} in ${label}`}
+                  >
+                    {available}
+                  </span>
+                )}
               </span>
               <span className="upgrade-tab__label">{label}</span>
               <span className="upgrade-tab__count">
@@ -1896,211 +2055,217 @@ function UpgradesView({
         })}
       </nav>
 
-      <table className={`upgrade-table upgrade-table--${activeTab}`}>
-        <thead>
-          <tr>
-            <th scope="col">Stufe</th>
-            <th scope="col">Upgrade</th>
-            <th scope="col">Effekt</th>
-            <th scope="col">
-              <span className="sr-only">Status oder Aktion</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {(activeTab === 'mow' ||
-            activeTab === 'water' ||
-            activeTab === 'maintain') &&
-            EQUIPMENT[activeTab].map((item, index) => {
-              const unlocked = index <= game.unlocked[activeTab];
-              const researching =
-                game.researchTask?.kind === activeTab &&
-                game.researchTask.targetLevel === index;
-              const status = unlocked
-                ? 'unlocked'
-                : upgradeResearchStatus(
-                    game,
-                    item.reputation,
-                    item.unlockCost,
-                    index === game.unlocked[activeTab] + 1,
-                    researching,
-                  );
-              const effects =
-                index === 0
-                  ? ['Grundausstattung']
-                  : equipmentBenefits(
-                      activeTab,
-                      EQUIPMENT[activeTab][index - 1],
-                      item,
-                    ).map((benefit) => benefit.label);
-              const title =
-                status === 'sequence'
-                  ? `Schalte zuerst Stufe ${index} frei.`
-                  : status === 'reputation'
-                    ? `Reputation ${item.reputation} erforderlich.`
-                    : status === 'funds'
-                      ? 'Nicht genug Vermögen.'
+      <div className="upgrade-table-scroll">
+        <table className={`upgrade-table upgrade-table--${activeTab}`}>
+          <thead>
+            <tr>
+              <th scope="col">Stufe</th>
+              <th scope="col">Upgrade</th>
+              <th scope="col">Features</th>
+              <th scope="col">
+                <span className="sr-only">Status oder Aktion</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {(activeTab === 'mow' ||
+              activeTab === 'water' ||
+              activeTab === 'maintain') &&
+              EQUIPMENT[activeTab].map((item, index) => {
+                const unlocked = index <= game.unlocked[activeTab];
+                const researching =
+                  game.researchTask?.kind === activeTab &&
+                  game.researchTask.targetLevel === index;
+                const status = unlocked
+                  ? 'unlocked'
+                  : upgradeResearchStatus(
+                      game,
+                      item.reputation,
+                      index === game.unlocked[activeTab] + 1,
+                      researching,
+                    );
+                const effects =
+                  index === 0 && activeTab === 'maintain'
+                    ? ['Grundausstattung']
+                    : equipmentBenefits(
+                        activeTab,
+                        EQUIPMENT[activeTab][Math.max(0, index - 1)],
+                        item,
+                      ).map((benefit) => benefit.label);
+                const title =
+                  status === 'sequence'
+                    ? `Schalte zuerst Stufe ${index} frei.`
+                    : status === 'reputation'
+                      ? `Reputation ${item.reputation} erforderlich.`
                       : status === 'busy'
                         ? game.researchTask
                           ? `Weiterbildung läuft: ${game.researchTask.name}`
                           : 'Alle Mitarbeiter sind beschäftigt.'
                         : undefined;
 
-              return (
-                <tr key={item.name} data-state={status}>
-                  <td data-label="Stufe">
-                    <span className="upgrade-level">{index + 1}</span>
-                  </td>
-                  <td data-label="Upgrade">
-                    <span className="upgrade-name">{item.name}</span>
-                    {item.automated && (
-                      <span className="upgrade-badge">Automatisch</span>
-                    )}
-                    {item.handsFree && !item.automated && (
-                      <span className="upgrade-badge">Freihändig</span>
-                    )}
-                  </td>
-                  <td data-label="Effekt">
-                    <UpgradeEffect
-                      description={item.description}
-                      effects={effects}
-                    />
-                  </td>
-                  <td className="upgrade-table__action">
-                    <UpgradeActionButton
-                      status={status}
-                      reputation={item.reputation}
-                      cost={item.unlockCost}
-                      duration={researchDurationMs(item.reputation)}
-                      actionLabel="Freischalten"
-                      onClick={() => onUnlock(activeTab)}
-                      title={title}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
+                return (
+                  <tr key={item.name} data-state={status}>
+                    <td data-label="Stufe">
+                      <span className="upgrade-level">{index + 1}</span>
+                    </td>
+                    <td data-label="Upgrade">
+                      <span className="upgrade-name">{item.name}</span>
+                      {item.automated && activeTab === 'maintain' && (
+                        <span className="upgrade-badge">Automatisch</span>
+                      )}
+                    </td>
+                    <td data-label="Features">
+                      <UpgradeEffect
+                        description={item.description}
+                        effects={effects}
+                      />
+                    </td>
+                    <td className="upgrade-table__action">
+                      <UpgradeActionButton
+                        status={status}
+                        reputation={item.reputation}
+                        duration={researchDurationMs(item.reputation)}
+                        remainingDuration={
+                          researching
+                            ? game.researchTask!.endsAt - game.lastUpdatedAt
+                            : undefined
+                        }
+                        actionLabel="Freischalten"
+                        onClick={() => onUnlock(activeTab)}
+                        title={title}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
 
-          {activeTab === 'workers' &&
-            Array.from({ length: 4 }, (_, index) => {
-              const workerNumber = index + 1;
-              const config = WORKER_UPGRADES.find(
-                (entry) => entry.workers === workerNumber,
-              );
-              const reputation = config?.reputation ?? 0;
-              const cost = config?.cost ?? 0;
-              const hired = workerNumber <= game.workers;
-              const status: UpgradeActionStatus = hired
-                ? 'hired'
-                : workerNumber > game.workers + 1
-                  ? 'sequence'
-                  : game.reputation < reputation
-                    ? 'reputation'
-                    : game.money < cost
-                      ? 'funds'
-                      : 'available';
-              return (
-                <tr key={workerNumber} data-state={status}>
-                  <td data-label="Stufe">
-                    <span className="upgrade-level">{workerNumber}</span>
-                  </td>
-                  <td data-label="Upgrade">
-                    <span className="upgrade-name">
-                      Mitarbeiter {workerNumber}
-                    </span>
-                  </td>
-                  <td data-label="Effekt">
-                    <UpgradeEffect
-                      description={
-                        workerNumber === 1
-                          ? 'Dein erster Mitarbeiter trägt den Betrieb von Anfang an.'
-                          : 'Erweitert dein Team dauerhaft um einen Mitarbeiter.'
-                      }
-                      effects={[
-                        `${workerNumber} parallele ${workerNumber === 1 ? 'Arbeit oder Weiterbildung' : 'Arbeiten oder Weiterbildungen'}`,
-                      ]}
-                    />
-                  </td>
-                  <td className="upgrade-table__action">
-                    <UpgradeActionButton
-                      status={status}
-                      reputation={reputation}
-                      cost={cost}
-                      actionLabel="Einstellen"
-                      onClick={onHireWorker}
-                      title={
-                        status === 'sequence'
-                          ? `Stelle zuerst Mitarbeiter ${workerNumber - 1} ein.`
-                          : status === 'reputation'
-                            ? `Reputation ${reputation} erforderlich.`
-                            : status === 'funds'
-                              ? 'Nicht genug Vermögen.'
-                              : undefined
-                      }
-                    />
-                  </td>
-                </tr>
-              );
-            })}
+            {activeTab === 'workers' &&
+              Array.from({ length: 4 }, (_, index) => {
+                const workerNumber = index + 1;
+                const config = WORKER_UPGRADES.find(
+                  (entry) => entry.workers === workerNumber,
+                );
+                const reputation = config?.reputation ?? 0;
+                const cost = config?.cost ?? 0;
+                const hired = workerNumber <= game.workers;
+                const status: UpgradeActionStatus = hired
+                  ? 'hired'
+                  : workerNumber > game.workers + 1
+                    ? 'sequence'
+                    : game.reputation < reputation
+                      ? 'reputation'
+                      : game.money < cost
+                        ? 'funds'
+                        : 'available';
+                return (
+                  <tr key={workerNumber} data-state={status}>
+                    <td data-label="Stufe">
+                      <span className="upgrade-level">{workerNumber}</span>
+                    </td>
+                    <td data-label="Upgrade">
+                      <span className="upgrade-name">
+                        Mitarbeiter {workerNumber}
+                      </span>
+                    </td>
+                    <td data-label="Features">
+                      <UpgradeEffect
+                        description={
+                          workerNumber === 1
+                            ? 'Dein erster Mitarbeiter trägt den Betrieb von Anfang an.'
+                            : 'Erweitert dein Team dauerhaft um einen Mitarbeiter.'
+                        }
+                        effects={[
+                          `${workerNumber} parallele ${workerNumber === 1 ? 'Arbeit oder Weiterbildung' : 'Arbeiten oder Weiterbildungen'}`,
+                        ]}
+                      />
+                    </td>
+                    <td className="upgrade-table__action">
+                      <UpgradeActionButton
+                        status={status}
+                        reputation={reputation}
+                        cost={cost}
+                        actionLabel="Einstellen"
+                        onClick={onHireWorker}
+                        title={
+                          status === 'sequence'
+                            ? `Stelle zuerst Mitarbeiter ${workerNumber - 1} ein.`
+                            : status === 'reputation'
+                              ? `Reputation ${reputation} erforderlich.`
+                              : status === 'funds'
+                                ? 'Nicht genug Vermögen.'
+                                : undefined
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
 
-          {activeTab === 'care' &&
-            CARE_UPGRADES.map((item, index) => {
-              const unlocked = game.chemistryUnlocked[item.id];
-              const researching = game.researchTask?.kind === item.id;
-              const previousUnlocked =
-                index === 0 || game.chemistryUnlocked.fertilizer;
-              const status = unlocked
-                ? 'unlocked'
-                : upgradeResearchStatus(
-                    game,
-                    item.reputation,
-                    item.cost,
-                    previousUnlocked,
-                    researching,
-                  );
-              return (
-                <tr key={item.id} data-state={status}>
-                  <td data-label="Stufe">
-                    <span className="upgrade-level">{index + 1}</span>
-                  </td>
-                  <td data-label="Upgrade">
-                    <span className="upgrade-name">{item.name}</span>
-                  </td>
-                  <td data-label="Effekt">
-                    <UpgradeEffect
-                      description={item.description}
-                      effects={item.effects}
-                    />
-                  </td>
-                  <td className="upgrade-table__action">
-                    <UpgradeActionButton
-                      status={status}
-                      reputation={item.reputation}
-                      cost={item.cost}
-                      duration={researchDurationMs(item.reputation)}
-                      actionLabel="Freischalten"
-                      onClick={() => onUnlockChemistry(item.id)}
-                      title={
-                        status === 'sequence'
-                          ? 'Schalte zuerst Dünger frei.'
-                          : status === 'reputation'
-                            ? `Reputation ${item.reputation} erforderlich.`
-                            : status === 'funds'
-                              ? 'Nicht genug Vermögen.'
+            {activeTab === 'care' &&
+              CARE_UPGRADES.map((item, index) => {
+                const unlocked = game.chemistryUnlocked[item.id];
+                const researching = game.researchTask?.kind === item.id;
+                const previousUnlocked =
+                  index === 0 || game.chemistryUnlocked.fertilizer;
+                const status = unlocked
+                  ? 'unlocked'
+                  : upgradeResearchStatus(
+                      game,
+                      item.reputation,
+                      previousUnlocked,
+                      researching,
+                    );
+                return (
+                  <tr key={item.id} data-state={status}>
+                    <td data-label="Stufe">
+                      <span className="upgrade-level">{index + 1}</span>
+                    </td>
+                    <td data-label="Upgrade">
+                      <span className="upgrade-name">{item.name}</span>
+                    </td>
+                    <td data-label="Features">
+                      <UpgradeEffect
+                        description={item.description}
+                        effects={item.effects}
+                      />
+                    </td>
+                    <td className="upgrade-table__action">
+                      <UpgradeActionButton
+                        status={status}
+                        reputation={item.reputation}
+                        duration={researchDurationMs(item.reputation)}
+                        remainingDuration={
+                          researching
+                            ? game.researchTask!.endsAt - game.lastUpdatedAt
+                            : undefined
+                        }
+                        actionLabel="Freischalten"
+                        onClick={() => onUnlockChemistry(item.id)}
+                        title={
+                          status === 'sequence'
+                            ? 'Schalte zuerst Dünger frei.'
+                            : status === 'reputation'
+                              ? `Reputation ${item.reputation} erforderlich.`
                               : undefined
-                      }
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-        </tbody>
-      </table>
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
 
 export default function Home() {
+  const {
+    updateAvailable,
+    installing: updateInstalling,
+    installUpdate,
+  } = usePwaUpdate();
   const {
     game,
     toasts,
@@ -2109,6 +2274,7 @@ export default function Home() {
     dismissOfflineSummary,
     setTutorialStep,
     startTask,
+    startAutomationIntervention,
     cancelTask,
     acceptOffer,
     declineOffer,
@@ -2259,6 +2425,9 @@ export default function Home() {
                   onStart={(kind) => startGuidedTask(selected.id, kind)}
                   onCancel={(kind) => cancelTask(selected.id, kind)}
                   onInstall={(kind) => installEquipment(selected.id, kind)}
+                  onAutomationIntervention={() =>
+                    startAutomationIntervention(selected.id)
+                  }
                   onOpenResearch={() => setView('upgrades')}
                 />
               </div>
@@ -2278,6 +2447,9 @@ export default function Home() {
                     onStart={(kind) => startGuidedTask(selected.id, kind)}
                     onCancel={(kind) => cancelTask(selected.id, kind)}
                     onInstall={(kind) => installEquipment(selected.id, kind)}
+                    onAutomationIntervention={() =>
+                      startAutomationIntervention(selected.id)
+                    }
                     onOpenResearch={() => setView('upgrades')}
                   />
                 </div>
@@ -2331,7 +2503,7 @@ export default function Home() {
             </div>
           )}
           {displayView === 'upgrades' && (
-            <div className="app__scroll">
+            <div className="app__scroll app__scroll--locked">
               <UpgradesView
                 game={game}
                 onUnlock={unlockEquipment}
@@ -2455,6 +2627,30 @@ export default function Home() {
                 <X />
               </Button>
             </div>
+            {updateAvailable && (
+              <div className="settings-update">
+                <div className="settings-update__head">
+                  <span className="settings-update__icon" aria-hidden="true">
+                    <RefreshCw />
+                  </span>
+                  <div>
+                    <p className="settings-update__title">Update verfügbar</p>
+                    <p className="settings-update__text">
+                      Die neue Version ist bereit und kann jetzt installiert
+                      werden.
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={installUpdate} disabled={updateInstalling}>
+                  <RefreshCw
+                    className={updateInstalling ? 'pulse' : undefined}
+                  />
+                  {updateInstalling
+                    ? 'Wird installiert …'
+                    : 'Update installieren'}
+                </Button>
+              </div>
+            )}
             <div className="danger">
               <p className="danger__title">Betrieb neu starten</p>
               <p className="danger__text">

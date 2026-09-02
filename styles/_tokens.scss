@@ -69,13 +69,11 @@
     #679a3f 4px 8px
   );
 
-  // Radien nach Bauteilgröße: Schaltflächen klein, Karten mittel, Tafeln groß
-  --radius-xs: 5px;
-  --radius-sm: 7px;
+  // Einheitlicher Radius für sämtliche Komponenten
+  --radius-xs: 9px;
+  --radius-sm: 9px;
   --radius: 9px;
-  --radius-md: 11px;
-  --radius-lg: 12px;
-  --radius-xl: 17px;
+  --radius-md: 9px;
 
   --shadow-lg:
     0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);

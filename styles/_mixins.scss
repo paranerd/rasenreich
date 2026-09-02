@@ -55,7 +55,7 @@
 }
 
 /// Die wiederkehrende Papierkarte: heller Grund, feiner Rahmen.
-@mixin card($radius: var(--radius-xl)) {
+@mixin card($radius: var(--radius)) {
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: $radius;

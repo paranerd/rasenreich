@@ -47,7 +47,7 @@
   text-align: center;
   background: var(--paper);
   border: 1px dashed var(--border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius);
   place-items: center;
 }
 
@@ -62,7 +62,7 @@
   margin: 0 auto 16px;
   color: var(--primary);
   background: var(--secondary);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius);
   place-items: center;
 }
 
@@ -148,7 +148,7 @@
 .stat {
   padding: 12px;
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
 }
 
 .stat__label {
@@ -289,7 +289,7 @@
   height: 30px;
   color: var(--ink-faintest);
   background: var(--paper);
-  border-radius: 999px;
+  border-radius: var(--radius);
   place-items: center;
 
   svg {
@@ -716,12 +716,16 @@
 }
 
 .view--upgrades {
+  height: 100%;
+  min-height: 0;
   gap: 16px;
   max-width: 1200px;
+  overflow: hidden;
 }
 
 .upgrade-page__head {
   display: flex;
+  flex-shrink: 0;
   gap: 16px;
   align-items: flex-end;
 }
@@ -730,6 +734,7 @@
   @include card;
 
   display: grid;
+  flex-shrink: 0;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   overflow: hidden;
@@ -751,7 +756,7 @@
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   transition:
     color 0.15s,
     background-color 0.15s,
@@ -799,6 +804,7 @@
 }
 
 .upgrade-tab__icon {
+  position: relative;
   display: grid;
   width: 32px;
   height: 32px;
@@ -811,6 +817,11 @@
     width: 16px;
     height: 16px;
   }
+}
+
+.upgrade-tab__indicator {
+  top: -6px;
+  right: -7px;
 }
 
 .upgrade-tab__label {
@@ -884,6 +895,13 @@
   }
 }
 
+.upgrade-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .upgrade-table--water {
   --panel-tone: var(--kind-water);
 }
@@ -912,7 +930,7 @@
   color: var(--panel-tone);
   background: color-mix(in srgb, var(--panel-tone) 10%, var(--paper));
   border: 1px solid color-mix(in srgb, var(--panel-tone) 26%, var(--border));
-  border-radius: 999px;
+  border-radius: var(--radius);
   place-items: center;
 }
 
@@ -951,14 +969,14 @@
 
 .upgrade-effect__list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px 12px;
+  flex-direction: column;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 
   li {
-    display: inline-flex;
+    display: flex;
     gap: 4px;
     align-items: center;
     font-size: 10.5px;
@@ -985,7 +1003,7 @@
   min-height: 52px;
   margin-left: auto;
   padding: 7px 9px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
 
   &:disabled {
     opacity: 1;
@@ -1088,7 +1106,7 @@
     overflow: visible;
     background: transparent;
     border: 0;
-    border-radius: 0;
+    border-radius: var(--radius);
   }
 
   .upgrade-table,
@@ -1108,7 +1126,7 @@
     padding: 13px;
     background: var(--paper);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
   }
 
   .upgrade-table tr:last-child {

@@ -13,7 +13,7 @@ Der Spieler hat 3 Aufgaben:
 
 Mit steigender Reputation erhält der Spieler im Laufe des Spiels Angebote für weitere Aufträge auf größeren Grundstücken. Dabei steigt das Einkommen mit der zu mähenden Fläche, aber die Dauer des Arbeiten wächst nicht 1:1 mit (eine doppelt so große Fläche zu mähen / bewässern / warten dauert nicht doppelt so lange, weil Rüstzeiten nahezu konstant bleiben)
 
-Jedes Grundstück hat seinen eigenen Rasenmäher, Gartenschlauch, etc. Diese Dinge können kaputt gehen und müssen dann repariert werden, was Zeit kostet.
+Jedes Grundstück hat seinen eigenen Rasenmäher, seine eigene Bewässerungstechnik etc. Jedes ausfallfähige Gerät besitzt einen eigenen Wartungszustand. Schlecht gepflegte Geräte können kaputt gehen und müssen dann repariert werden, was Zeit und Ersatzteile kostet.
 
 ## Mähen
 
@@ -43,7 +43,7 @@ Beispiel:
 
 ## Wartung
 
-Geräte verschleißen mit der Zeit, mit Nutzung und auch einfach spontan durch unerwartete Events. Wartung kostet Zeit und Geld und stellt den Zustand immer vollständig her; besseres Werkzeug macht sie schneller, nicht gründlicher. Letztlich lässt sich die Wartung durch Beauftragung einer Firma komplett automatisieren.
+Mäher und Bewässerungstechnik verschleißen unabhängig voneinander mit der Zeit und durch Nutzung. Wartung kostet Zeit und Geld und stellt beide Zustände vollständig her; besseres Werkzeug macht sie schneller, nicht gründlicher. Letztlich lässt sich die Wartung durch Beauftragung einer Firma komplett automatisieren.
 
 Beispiel:
 
@@ -58,9 +58,13 @@ Der Spieler leitet den Betrieb als Geschäftsführer und weist die Arbeiten sein
 
 Auf einem Grundstück dürfen Mähen, Bewässern und Wartung parallel laufen; dieselbe Aufgabenart kann dort aber nicht mehrfach gleichzeitig gestartet werden.
 
-Freihändige und automatische Technik belegt keinen Mitarbeiter. Vollautomatische Technik startet eine Aufgabe zusätzlich selbstständig, sobald Bedarf entsteht.
+Manuelle Technik belegt einen Mitarbeiter während der gesamten Aufgabe. Das gilt auch für Regner: Solange sie nicht automatisiert sind, müssen sie manuell gestartet, überwacht und wieder ausgeschaltet werden. Vollautomatische Technik belegt keinen Mitarbeiter und startet selbstständig, sobald Bedarf entsteht.
+
+Mähroboter besitzen zusätzlich zum technischen Wartungszustand eine Zuverlässigkeit. Schlägt sie bei einem Mähdurchgang fehl, pausiert der Roboter, ohne technisch defekt zu sein. Der Spieler muss einen freien Mitarbeiter für einen kurzen manuellen Eingriff zuweisen. Der Einsatz kostet nichts, dauert acht Sekunden und der Roboter setzt anschließend denselben Mähdurchgang fort. Ist niemand frei, wartet er unbegrenzt. Diese Unterbrechung verursacht weder Verschleiß noch Reparaturkosten.
 
 ## Upgrades
+
+Equipment und Pflegewissen werden über eine Weiterbildung freigeschaltet. Das Lernen kostet kein Geld, belegt aber für die angezeigte Dauer einen freien Mitarbeiter. Die verbleibende Lernzeit wird direkt im Aktionsbutton dargestellt. Einmalige Geldkosten entstehen im Upgrade-Bereich ausschließlich beim Einstellen zusätzlicher Mitarbeiter. Die spätere Anschaffung von Equipment und die Anwendung von Pflegeprodukten auf einzelnen Grundstücken bleiben davon getrennt und kosten weiterhin Geld.
 
 - Mitarbeiter
   - 2. Mitarbeiter: Reputation 5, 500 €
@@ -70,22 +74,33 @@ Freihändige und automatische Technik belegt keinen Mitarbeiter. Vollautomatisch
   - Dünger (Rasen wächst schneller)
   - Unkrautvernichter
 - Rasenmäher
-  - Manueller Schiebe-Mäher
-  - Benzinmäher
-  - Mäher mit Antrieb (schneller)
-  - Aufsitzmäher
-  - Mähroboter (Automation)
-    - Ausbau
-      - Zuverlässigkeit
-      - Kantenschnitt
-      - Mähbreite
+  - Grashüpfer: Schiebemäher, 100 % Geschwindigkeit
+  - Rasen-Rambo: Benzinmäher, 125 % Geschwindigkeit
+  - TurboMow 500: Benzinmäher mit Radantrieb, 160 % Geschwindigkeit
+  - Brumm Brumm 1000: kleiner Aufsitzmäher, 250 % Geschwindigkeit
+  - Mähximus 3000: Rasentraktor mit größerer Mähbreite, 350 % Geschwindigkeit
+  - Graszilla Deluxe: großer Rasentraktor als stärkste aktive Mähtechnik, 500 % Geschwindigkeit
+  - GreenBot Easy: 50 % Geschwindigkeit, 70 % Zuverlässigkeit, Pflegegrad bis 75 %
+  - PowerBot Pro: 65 % Geschwindigkeit, 80 % Zuverlässigkeit, Pflegegrad bis 85 %
+  - SmartCut Deluxe: 80 % Geschwindigkeit, 90 % Zuverlässigkeit, Pflegegrad bis 95 %
+  - TerraPilot Ultra: 100 % Geschwindigkeit, 95 % Zuverlässigkeit, Pflegegrad bis 100 %
+
+Alle manuellen Mäher besitzen 100 % Zuverlässigkeit und erreichen einen maximalen Pflegegrad von 100 %. Jeder Roboter besitzt das Feature „Automatisches Mähen“. Die Mähgeschwindigkeit wird in der Oberfläche immer absolut relativ zum Grashüpfer dargestellt; 100 % entsprechen der Leistung des ursprünglichen Schiebemähers.
+
 - Bewässerung
-  - Gartenschlauch
-  - Bügelregner
-  - Versenksprenger (Automation)
-    - Ausbau
-      - Zuverlässigkeit
-      - Frostschutz
+  - Plätscherfix: Gartenschlauch, 100 % Geschwindigkeit
+  - BrauseBoost 200: Bewässerungsbrause, 130 % Geschwindigkeit
+  - HydroBoost 500: Hochdurchflussbrause, 170 % Geschwindigkeit
+  - Regenmacher Compact: manueller Bügelregner, 220 % Geschwindigkeit
+  - Kreisblitz 2000: manueller Impulsregner, 300 % Geschwindigkeit
+  - Gießzilla Deluxe: manuelles Mehrregner-System, 400 % Geschwindigkeit
+  - AquaPilot Easy: 60 % Geschwindigkeit, automatische Bewässerung bis 75 %
+  - HydroSense Pro: 80 % Geschwindigkeit, automatische Bewässerung bis 85 %
+  - RainMind Deluxe: 100 % Geschwindigkeit, automatische Bewässerung bis 95 %
+  - TerraFlow Ultra: 125 % Geschwindigkeit, automatische Bewässerung bis 100 %
+
+Alle manuellen Bewässerer erreichen 100 % Zuverlässigkeit und einen Bewässerungsgrad von 100 %, belegen aber während des gesamten Durchgangs einen Mitarbeiter. Automatische Anlagen starten selbstständig, benötigen im Normalbetrieb keinen Mitarbeiter und besitzen 70 %, 80 %, 90 % beziehungsweise 95 % Zuverlässigkeit. Bei einem Zuverlässigkeitsfehler pausiert die Anlage und benötigt einen kurzen manuellen Eingriff. Die angezeigte Geschwindigkeit ist absolut relativ zum Plätscherfix.
+
 - Wartung
   - Einfache Werkzeugtasche
   - Besseres Werkzeug

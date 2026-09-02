@@ -16,6 +16,7 @@ import {
   OfflineSummary,
   resolveEvent,
   simulateGame,
+  startAutomationIntervention,
   startTask,
   TaskKind,
   unlockChemistry,
@@ -290,6 +291,8 @@ export function useGame() {
       ),
     startTask: (propertyId: string, kind: TaskKind) =>
       run((current) => startTask(current, propertyId, kind)),
+    startAutomationIntervention: (propertyId: string) =>
+      run((current) => startAutomationIntervention(current, propertyId)),
     cancelTask: (propertyId: string, kind: TaskKind) =>
       run((current) => cancelTask(current, propertyId, kind)),
     acceptOffer: (offerId: string) =>

@@ -7,12 +7,16 @@ export type KnowledgeKind = TaskKind | 'fertilizer' | 'weedControl';
 
 export interface EquipmentLevel {
   name: string;
-  unlockCost: number;
   installCost: number;
   reputation: number;
   speed: number;
   automated?: boolean;
-  handsFree?: boolean;
+  /** Chance eines Roboter-Mähdurchgangs ohne kurzen manuellen Eingriff. */
+  reliability?: number;
+  /** Maximal erreichbarer Pflegegrad beim autonomen Mähen. */
+  maxCare?: number;
+  /** Maximal erreichbarer Bewässerungsgrad. */
+  maxWater?: number;
   description: string;
 }
 
@@ -27,8 +31,8 @@ export interface TaskEffect {
    * die Arbeit mit aus und landet am Ende exakt bei 100 %.
    */
   target?: { key: TaskTargetKey; value: number };
-  /** Nebenwirkung auf den Gerätezustand, als Gesamtmenge über die Laufzeit. */
-  condition?: number;
+  /** Verschleiß am tatsächlich benutzten Gerät über die gesamte Laufzeit. */
+  wear?: { kind: BreakableKind; amount: number };
 }
 
 export type TaskPhase = 'setup' | 'work' | 'wrapup';
@@ -46,7 +50,7 @@ export interface PropertyTask {
   automated: boolean;
   /** Belegt waehrend der gesamten Laufzeit einen Mitarbeiter. */
   usesWorker: boolean;
-  /** Nullbasiertes Mitarbeiter-Slot, bei Automatik und freihändiger Technik leer. */
+  /** Nullbasiertes Mitarbeiter-Slot, bei Automatik leer. */
   workerId?: number;
   /** Nur für die Migration alter Spielstände. */
   blocksPlayer?: boolean;
@@ -61,6 +65,20 @@ export interface PropertyTask {
   effectProgress?: number;
   /** Abgebrochen — es läuft nur noch der Abschluss, ohne weitere Wirkung. */
   cancelled?: boolean;
+  /** Geplanter einmaliger Stopp eines automatischen Durchgangs. */
+  automationInterruptionAt?: number;
+  /** Nur für die Migration alter Spielstände. */
+  robotInterruptionAt?: number;
+}
+
+export interface AutomationIntervention {
+  kind: BreakableKind;
+  /** Seit wann der automatische Durchgang auf einen Mitarbeiter wartet. */
+  pausedAt: number;
+  /** Beginn und Ende des kurzen manuellen Eingriffs. */
+  startedAt?: number;
+  endsAt?: number;
+  workerId?: number;
 }
 
 export interface ResearchTask {
@@ -86,6 +104,8 @@ export interface GardenProperty {
   grass: number;
   moisture: number;
   condition: number;
+  /** Technischer Wartungszustand je ausfallfähigem Gerät. */
+  equipmentCondition: Record<BreakableKind, number>;
   satisfaction: number;
   equipment: Record<TaskKind, number>;
   /** Ausgefallene Geräte. Ein defektes Gerät sperrt nur seine eigene Aufgabe. */
@@ -93,6 +113,10 @@ export interface GardenProperty {
   fertilizer: boolean;
   weedControl: boolean;
   tasks: PropertyTask[];
+  /** Unabhängig vom technischen Zustand: eine blockierte Automatik. */
+  automationIntervention?: AutomationIntervention;
+  /** Nur für die Migration alter Spielstände. */
+  robotIntervention?: Omit<AutomationIntervention, 'kind'>;
   /** Nur für die Migration alter Spielstände. */
   task?: PropertyTask;
   rescueUntil?: number;
@@ -131,8 +155,24 @@ export interface GameLog {
   tone: 'good' | 'neutral' | 'warning';
 }
 
-export const SAVE_VERSION = 7;
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, SAVE_VERSION];
+export const SAVE_VERSION = 15;
+const SUPPORTED_VERSIONS = [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  SAVE_VERSION,
+];
 
 export const MAX_WORKERS = 4;
 
@@ -189,81 +229,219 @@ export interface GameResult {
 export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
   mow: [
     {
-      name: 'Schiebemäher',
-      unlockCost: 0,
+      name: 'Grashüpfer',
       installCost: 0,
       reputation: 0,
       speed: 1,
-      description: 'Solider Einstieg, vollständig manuell.',
+      reliability: 1,
+      maxCare: 100,
+      description:
+        'Klassischer Schiebemäher: langsam, direkt und unverwüstlich.',
     },
     {
-      name: 'Benzinmäher',
-      unlockCost: 120,
+      name: 'Rasen-Rambo',
       installCost: 180,
       reputation: 3,
-      speed: 0.82,
-      description: 'Mehr Leistung bei langem Gras.',
+      speed: 0.8,
+      reliability: 1,
+      maxCare: 100,
+      description:
+        'Ein kräftiger Benzinmotor liefert mehr Tempo bei langem Gras.',
     },
     {
-      name: 'Mäher mit Antrieb',
-      unlockCost: 480,
+      name: 'TurboMow 500',
       installCost: 720,
       reputation: 8,
-      speed: 0.62,
-      description: 'Spart spürbar Zeit auf mittleren Flächen.',
+      speed: 0.625,
+      reliability: 1,
+      maxCare: 100,
+      description:
+        'Der Radantrieb zieht den Benzinmäher zügig über mittlere Flächen.',
     },
     {
-      name: 'Aufsitzmäher',
-      unlockCost: 1_600,
+      name: 'Brumm Brumm 1000',
       installCost: 2_400,
       reputation: 18,
       speed: 0.4,
-      description: 'Große Flächen werden schnell beherrschbar.',
+      reliability: 1,
+      maxCare: 100,
+      description:
+        'Ein kleiner Aufsitzmäher macht größere Flächen bequem beherrschbar.',
     },
     {
-      name: 'Mähroboter',
-      unlockCost: 5_000,
-      installCost: 7_500,
-      reputation: 32,
-      speed: 0.65,
-      automated: true,
+      name: 'Mähximus 3000',
+      installCost: 5_400,
+      reputation: 28,
+      speed: 0.286,
+      reliability: 1,
+      maxCare: 100,
       description:
-        'Mäht langsamer als der Aufsitzmäher, startet dafür selbstständig im optimalen Fenster.',
+        'Der Rasentraktor gewinnt mit größerer Mähbreite viel Fläche pro Bahn.',
+    },
+    {
+      name: 'Graszilla Deluxe',
+      installCost: 11_250,
+      reputation: 40,
+      speed: 0.2,
+      reliability: 1,
+      maxCare: 100,
+      description:
+        'Ein großer Rasentraktor mit breitem Doppelmähdeck für maximale aktive Leistung.',
+    },
+    {
+      name: 'GreenBot Easy',
+      installCost: 19_500,
+      reputation: 52,
+      speed: 2,
+      automated: true,
+      reliability: 0.7,
+      maxCare: 75,
+      description:
+        'Arbeitet automatisch, braucht aber noch häufiger kurze Hilfe.',
+    },
+    {
+      name: 'PowerBot Pro',
+      installCost: 36_000,
+      reputation: 66,
+      speed: 1.538,
+      automated: true,
+      reliability: 0.8,
+      maxCare: 85,
+      description:
+        'Intelligente Navigation verbessert Tempo und Zuverlässigkeit.',
+    },
+    {
+      name: 'SmartCut Deluxe',
+      installCost: 67_500,
+      reputation: 82,
+      speed: 1.25,
+      automated: true,
+      reliability: 0.9,
+      maxCare: 95,
+      description:
+        'Cut-to-Edge und bürstenloser Motor liefern fast perfekte Pflege.',
+    },
+    {
+      name: 'TerraPilot Ultra',
+      installCost: 127_500,
+      reputation: 100,
+      speed: 1,
+      automated: true,
+      reliability: 0.95,
+      maxCare: 100,
+      description:
+        'LiDAR und Allradantrieb pflegen jede Fläche vollständig autonom.',
     },
   ],
   water: [
     {
-      name: 'Gartenschlauch',
-      unlockCost: 0,
+      name: 'Plätscherfix',
       installCost: 0,
       reputation: 0,
       speed: 1,
+      reliability: 1,
+      maxWater: 100,
       description:
-        'Günstig, bindet aber einen Mitarbeiter während des Wässerns.',
+        'Ein klassischer Gartenschlauch bindet einen Mitarbeiter während der gesamten Bewässerung.',
     },
     {
-      name: 'Bügelregner',
-      unlockCost: 260,
+      name: 'BrauseBoost 200',
       installCost: 390,
       reputation: 5,
-      speed: 0.62,
-      handsFree: true,
-      description: 'Schneller und nach dem Start weitgehend selbstständig.',
+      speed: 0.769,
+      reliability: 1,
+      maxWater: 100,
+      description:
+        'Eine ergonomische Bewässerungsbrause verteilt das Wasser gleichmäßiger und schneller.',
     },
     {
-      name: 'Versenksprenger',
-      unlockCost: 2_200,
-      installCost: 3_300,
-      reputation: 22,
-      speed: 0.3,
+      name: 'HydroBoost 500',
+      installCost: 975,
+      reputation: 10,
+      speed: 0.588,
+      reliability: 1,
+      maxWater: 100,
+      description:
+        'Eine Hochdurchflussbrause mit Druckverstärkung bewältigt größere Flächen.',
+    },
+    {
+      name: 'Regenmacher Compact',
+      installCost: 2_250,
+      reputation: 18,
+      speed: 0.455,
+      reliability: 1,
+      maxWater: 100,
+      description:
+        'Ein kompakter Bügelregner muss manuell gestartet und wieder abgestellt werden.',
+    },
+    {
+      name: 'Kreisblitz 2000',
+      installCost: 4_800,
+      reputation: 28,
+      speed: 0.333,
+      reliability: 1,
+      maxWater: 100,
+      description:
+        'Ein manuell bedienter Impulsregner versorgt große Flächen im Kreis.',
+    },
+    {
+      name: 'Gießzilla Deluxe',
+      installCost: 9_750,
+      reputation: 40,
+      speed: 0.25,
+      reliability: 1,
+      maxWater: 100,
+      description:
+        'Mehrere manuell geschaltete Regner bewässern große Grundstücke in parallelen Zonen.',
+    },
+    {
+      name: 'AquaPilot Easy',
+      installCost: 16_500,
+      reputation: 52,
+      speed: 1.667,
       automated: true,
-      description: 'Bewässert automatisch, sobald der Boden trocken wird.',
+      reliability: 0.7,
+      maxWater: 75,
+      description:
+        'Eine einfache zeitgesteuerte Versenkberegnung startet automatisch.',
+    },
+    {
+      name: 'HydroSense Pro',
+      installCost: 30_000,
+      reputation: 66,
+      speed: 1.25,
+      automated: true,
+      reliability: 0.8,
+      maxWater: 85,
+      description:
+        'Bodenfeuchtesensoren erkennen, wann einzelne Bereiche Wasser benötigen.',
+    },
+    {
+      name: 'RainMind Deluxe',
+      installCost: 57_000,
+      reputation: 82,
+      speed: 1,
+      automated: true,
+      reliability: 0.9,
+      maxWater: 95,
+      description:
+        'Wetterdaten und intelligente Zonensteuerung optimieren jeden Durchgang.',
+    },
+    {
+      name: 'TerraFlow Ultra',
+      installCost: 105_000,
+      reputation: 100,
+      speed: 0.8,
+      automated: true,
+      reliability: 0.95,
+      maxWater: 100,
+      description:
+        'Ein Sensornetz regelt Wassermenge, Druck und Zonen vorausschauend.',
     },
   ],
   maintain: [
     {
       name: 'Werkzeugtasche',
-      unlockCost: 0,
       installCost: 0,
       reputation: 0,
       speed: 1,
@@ -271,7 +449,6 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
     },
     {
       name: 'Profiwerkzeug',
-      unlockCost: 320,
       installCost: 480,
       reputation: 6,
       speed: 0.72,
@@ -279,7 +456,6 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
     },
     {
       name: 'Akkuwerkzeug',
-      unlockCost: 900,
       installCost: 1_350,
       reputation: 14,
       speed: 0.5,
@@ -287,7 +463,6 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
     },
     {
       name: 'Serviceteam',
-      unlockCost: 4_200,
       installCost: 6_300,
       reputation: 28,
       speed: 0.25,
@@ -376,6 +551,26 @@ const addLog = (
   state.logs = state.logs.slice(0, 12);
 };
 
+/** Der sichtbare Technikzustand ist der schlechtere der beiden Gerätezustände. */
+function syncEquipmentCondition(property: GardenProperty) {
+  property.condition = Math.min(
+    property.equipmentCondition.mow,
+    property.equipmentCondition.water,
+  );
+}
+
+export function equipmentCondition(
+  property: GardenProperty,
+  kind?: BreakableKind,
+) {
+  return kind
+    ? property.equipmentCondition[kind]
+    : Math.min(
+        property.equipmentCondition.mow,
+        property.equipmentCondition.water,
+      );
+}
+
 export function createInitialState(now = Date.now()): GameState {
   return {
     version: SAVE_VERSION,
@@ -440,7 +635,7 @@ export function satisfactionTarget(property: GardenProperty) {
   return (
     propertyMetricPercent(property, 'mow') * SATISFACTION_WEIGHTS.mow +
     moistureQuality(property.moisture) * SATISFACTION_WEIGHTS.water +
-    property.condition * SATISFACTION_WEIGHTS.maintain
+    equipmentCondition(property) * SATISFACTION_WEIGHTS.maintain
   );
 }
 
@@ -462,7 +657,7 @@ export function brokenCount(property: GardenProperty) {
  */
 export function failureRisk(property: GardenProperty, kind: TaskKind) {
   if (kind === 'maintain' || property.broken[kind]) return 0;
-  const wear = Math.max(0, 70 - property.condition) / 70;
+  const wear = Math.max(0, 70 - equipmentCondition(property, kind)) / 70;
   return 0.22 * wear * wear;
 }
 
@@ -537,7 +732,11 @@ export function taskDuration(property: GardenProperty, kind: TaskKind) {
   const equipment = EQUIPMENT[kind][property.equipment[kind]];
   // Die Arbeit läuft bis 100 %, die Dauer wächst also mit dem Weg dorthin.
   const load = taskWorkload(property, kind) / REFERENCE_WORKLOAD[kind];
-  let conditionFactor = 1 + Math.max(0, 55 - property.condition) / 100;
+  const relevantCondition =
+    kind === 'maintain'
+      ? equipmentCondition(property)
+      : equipmentCondition(property, kind);
+  let conditionFactor = 1 + Math.max(0, 55 - relevantCondition) / 100;
   // Langes und nasses Gras ist zäher, nicht nur mehr.
   if (kind === 'mow' && property.grass > 100) conditionFactor *= 1.5;
   else if (kind === 'mow' && property.grass > 80) conditionFactor *= 1.2;
@@ -553,7 +752,12 @@ export function maintenanceCost(property: GardenProperty) {
   const upkeep = Math.max(
     8,
     Math.round(
-      (100 - property.condition) * 0.7 * Math.pow(property.size / 120, 0.25),
+      BREAKABLE.reduce(
+        (sum, kind) => sum + (100 - equipmentCondition(property, kind)),
+        0,
+      ) *
+        0.42 *
+        Math.pow(property.size / 120, 0.25),
     ),
   );
   return (
@@ -578,14 +782,27 @@ export const MAX_CUT = 66;
 /** Graslänge, bei der die Anzeige genau 100 % erreicht — dort endet ein Schnitt. */
 export const GRASS_FLOOR = 20;
 
+/** Ziel-Graslänge des installierten Mähers, abgeleitet vom maximalen Pflegegrad. */
+export function mowingTargetGrass(property: GardenProperty) {
+  const maxCare = EQUIPMENT.mow[property.equipment.mow].maxCare ?? 100;
+  return 150 - maxCare * 1.3;
+}
+
+/** Ziel der installierten Bewässerungstechnik. */
+export function wateringTarget(property: GardenProperty) {
+  return EQUIPMENT.water[property.equipment.water].maxWater ?? 100;
+}
+
 /**
  * Wie viele Punkte eine Arbeit zurückzulegen hat, bis ihr Wert bei 100 % liegt.
  * Jede Arbeit läuft bis dahin durch; abgebrochen wird nur von Hand.
  */
 export function taskWorkload(property: GardenProperty, kind: TaskKind) {
-  if (kind === 'mow') return Math.max(0, property.grass - GRASS_FLOOR);
-  if (kind === 'water') return Math.max(0, 100 - property.moisture);
-  return Math.max(0, 100 - property.condition);
+  if (kind === 'mow')
+    return Math.max(0, property.grass - mowingTargetGrass(property));
+  if (kind === 'water')
+    return Math.max(0, wateringTarget(property) - property.moisture);
+  return Math.max(0, 100 - equipmentCondition(property));
 }
 
 /** Pensum, bei dem die Arbeit genau die Grundzeit dauert. */
@@ -597,13 +814,16 @@ const REFERENCE_WORKLOAD: Record<TaskKind, number> = {
 
 export function mowingPayout(property: GardenProperty, grass = property.grass) {
   const qualityBase = property.weedControl ? 1.08 : 1;
-  const cut = Math.max(0, Math.min(MAX_CUT, grass - GRASS_FLOOR));
+  const cut = Math.max(
+    0,
+    Math.min(MAX_CUT, grass - mowingTargetGrass(property)),
+  );
   return Math.round(property.payout * 1.2 * (cut / MAX_CUT) * qualityBase);
 }
 
 /** Bewaessern ist bezahlte Arbeitszeit — der Lohn steigt mit dem tatsaechlichen Wasserbedarf. */
 export function wateringPayout(property: GardenProperty) {
-  const deficit = Math.max(0, 100 - property.moisture);
+  const deficit = Math.max(0, wateringTarget(property) - property.moisture);
   return Math.round(property.payout * 0.6 * Math.min(1, deficit / 60));
 }
 
@@ -641,7 +861,10 @@ function rollFailure(
   if (kind === 'maintain' || property.broken[kind]) return;
   if (Math.random() >= failureRisk(property, kind)) return;
   property.broken[kind] = true;
-  property.condition = clamp(property.condition - 12);
+  property.equipmentCondition[kind] = clamp(
+    property.equipmentCondition[kind] - 12,
+  );
+  syncEquipmentCondition(property);
   addLog(
     state,
     `${property.name}: ${EQUIPMENT[kind][property.equipment[kind]].name} ist ausgefallen und muss repariert werden.`,
@@ -665,12 +888,15 @@ function mowingWear(property: GardenProperty) {
 function taskEffect(property: GardenProperty, kind: TaskKind): TaskEffect {
   if (kind === 'mow') {
     return {
-      target: { key: 'grass', value: GRASS_FLOOR },
-      condition: -mowingWear(property),
+      target: { key: 'grass', value: mowingTargetGrass(property) },
+      wear: { kind: 'mow', amount: -mowingWear(property) },
     };
   }
   if (kind === 'water')
-    return { target: { key: 'moisture', value: 100 }, condition: -0.8 };
+    return {
+      target: { key: 'moisture', value: wateringTarget(property) },
+      wear: { kind: 'water', amount: -0.8 },
+    };
   return { target: { key: 'condition', value: 100 } };
 }
 
@@ -685,7 +911,7 @@ function createTask(
 ): PropertyTask {
   const workStartsAt = at + taskSetupDuration(property, kind) * 1_000;
   const workEndsAt = workStartsAt + taskDuration(property, kind) * 1_000;
-  return {
+  const task: PropertyTask = {
     kind,
     startedAt: at,
     workStartsAt,
@@ -702,6 +928,16 @@ function createTask(
     effect: taskEffect(property, kind),
     effectProgress: 0,
   };
+  const equipment = EQUIPMENT[kind][property.equipment[kind]];
+  if (
+    equipment.automated &&
+    equipment.reliability !== undefined &&
+    Math.random() > equipment.reliability
+  ) {
+    task.automationInterruptionAt =
+      workStartsAt + (workEndsAt - workStartsAt) * (0.3 + Math.random() * 0.4);
+  }
+  return task;
 }
 
 /** Lässt die Werte während der Arbeit mitlaufen, statt erst am Ende zu springen. */
@@ -710,7 +946,12 @@ function accrueTaskEffect(
   task: PropertyTask,
   intervalEnd: number,
 ) {
-  if (!task.effect || task.cancelled) return;
+  if (
+    !task.effect ||
+    task.cancelled ||
+    property.automationIntervention?.kind === task.kind
+  )
+    return;
   const { from, to } = taskWorkWindow(task);
   const progress = clamp(
     (Math.min(intervalEnd, to) - from) / Math.max(1, to - from),
@@ -723,21 +964,35 @@ function accrueTaskEffect(
   const previous = task.effectProgress ?? 0;
   task.effectProgress = progress;
 
-  const { target, condition } = task.effect;
+  const { target, wear } = task.effect;
   if (target) {
     // Anteil der noch offenen Strecke, der in diesem Schritt zurückgelegt wird.
     // Beim letzten Schritt ist er 1, deshalb landet der Wert exakt auf dem Ziel.
     const share = Math.min(1, step / Math.max(1e-9, 1 - previous));
-    const current = property[target.key];
-    const max = target.key === 'grass' ? 150 : 100;
-    property[target.key] = clamp(
-      current + (target.value - current) * share,
-      0,
-      max,
-    );
+    if (target.key === 'condition') {
+      BREAKABLE.forEach((kind) => {
+        const current = property.equipmentCondition[kind];
+        property.equipmentCondition[kind] = clamp(
+          current + (target.value - current) * share,
+        );
+      });
+      syncEquipmentCondition(property);
+    } else {
+      const current = property[target.key];
+      const max = target.key === 'grass' ? 150 : 100;
+      property[target.key] = clamp(
+        current + (target.value - current) * share,
+        0,
+        max,
+      );
+    }
   }
-  if (condition)
-    property.condition = clamp(property.condition + condition * step);
+  if (wear) {
+    property.equipmentCondition[wear.kind] = clamp(
+      property.equipmentCondition[wear.kind] + wear.amount * step,
+    );
+    syncEquipmentCondition(property);
+  }
 }
 
 function completeTask(
@@ -809,6 +1064,8 @@ function completeTask(
   if (task.kind === 'maintain') {
     const repaired = brokenCount(property);
     property.broken = { mow: false, water: false };
+    property.equipmentCondition = { mow: 100, water: 100 };
+    syncEquipmentCondition(property);
     addLog(
       state,
       repaired > 0
@@ -829,7 +1086,12 @@ function accrueTaskRevenue(
   intervalStart: number,
   intervalEnd: number,
 ) {
-  if (task.kind === 'maintain' || task.cancelled) return;
+  if (
+    task.kind === 'maintain' ||
+    task.cancelled ||
+    property.automationIntervention?.kind === task.kind
+  )
+    return;
 
   const payoutTotal = task.payoutTotal ?? taskPayout(property, task.kind);
   const { from, to } = taskWorkWindow(task);
@@ -865,21 +1127,21 @@ function startAutomatedTask(
 function tryAutomation(state: GameState, property: GardenProperty, at: number) {
   if (
     isAutomated(property, 'maintain') &&
-    (property.condition <= 48 || isBroken(property))
+    (equipmentCondition(property) <= 48 || isBroken(property))
   ) {
     startAutomatedTask(state, property, 'maintain', at);
   }
   if (
     isAutomated(property, 'water') &&
     !property.broken.water &&
-    property.moisture <= 55
+    property.moisture <= Math.min(55, wateringTarget(property) - 15)
   ) {
     startAutomatedTask(state, property, 'water', at);
   }
   if (
     isAutomated(property, 'mow') &&
     !property.broken.mow &&
-    property.grass >= 64
+    property.grass >= Math.max(64, mowingTargetGrass(property) + 8)
   ) {
     startAutomatedTask(state, property, 'mow', at);
   }
@@ -911,8 +1173,14 @@ function advanceNaturalState(
     100,
   );
 
-  if (property.tasks.length === 0)
-    property.condition = clamp(property.condition - 0.006 * minutes);
+  BREAKABLE.forEach((kind) => {
+    if (!property.tasks.some((task) => task.kind === kind)) {
+      property.equipmentCondition[kind] = clamp(
+        property.equipmentCondition[kind] - 0.003 * minutes,
+      );
+    }
+  });
+  syncEquipmentCondition(property);
 
   // Die Zufriedenheit folgt dem Zustand der drei Werte, aber träge. Der
   // Anspruch des Kunden wirkt dabei einseitig: er sinkt schneller, als er sich
@@ -1072,8 +1340,39 @@ export function migrateState(raw: GameState): GameState | undefined {
   );
   // Bestehende Betriebe werden nicht nachträglich in die Einführung geschickt.
   state.tutorialStep = raw.version < 5 ? null : (state.tutorialStep ?? null);
+  // Version 7 hatte den einzigen Mähroboter auf Stufe 5. Er wird zum neuen
+  // GreenBot Easy auf Stufe 7 verschoben, damit bestehende Automatik erhalten bleibt.
+  if (raw.version < 8 && state.unlocked.mow >= 4) state.unlocked.mow += 2;
+  // Die frühere dreistufige Bewässerung wird auf ihre direkten Nachfolger
+  // abgebildet: Schlauch, manueller Bügelregner und automatische Anlage.
+  if (raw.version < 14) {
+    state.unlocked.water =
+      state.unlocked.water === 0 ? 0 : state.unlocked.water === 1 ? 3 : 6;
+  }
   state.properties.forEach((property) => {
     property.moisture = clamp(property.moisture, 0, 100);
+    if (raw.version < 8 && property.equipment.mow >= 4)
+      property.equipment.mow += 2;
+    if (raw.version < 14) {
+      property.equipment.water =
+        property.equipment.water === 0
+          ? 0
+          : property.equipment.water === 1
+            ? 3
+            : 6;
+    }
+    if (raw.version < 15 && property.robotIntervention) {
+      property.automationIntervention = {
+        ...property.robotIntervention,
+        kind: 'mow',
+      };
+      delete property.robotIntervention;
+    }
+    property.equipmentCondition ??= {
+      mow: clamp(property.condition ?? 88),
+      water: clamp(property.condition ?? 88),
+    };
+    syncEquipmentCondition(property);
     property.broken ??= {
       mow: property.condition <= 0,
       water: property.condition <= 0,
@@ -1084,13 +1383,21 @@ export function migrateState(raw: GameState): GameState | undefined {
     // Vor Version 3 sprangen die Werte erst am Ende; laufende Aufgaben
     // bekommen ihre Wirkung nachtraeglich und tragen sie ueber die Restzeit ab.
     property.tasks.forEach((task) => {
+      if (raw.version < 15 && task.robotInterruptionAt !== undefined) {
+        task.automationInterruptionAt = task.robotInterruptionAt;
+        delete task.robotInterruptionAt;
+      }
       task.startGrass ??= property.grass;
       task.startMoisture ??= property.moisture;
       task.effectProgress ??= 0;
       task.usesWorker ??= task.blocksPlayer ?? !task.automated;
       if (task.usesWorker) task.workerId ??= 0;
       // Vor Version 4 trug die Wirkung feste Mengen statt eines Ziels.
-      if (!task.effect?.target) {
+      if (
+        raw.version < 8 ||
+        (raw.version < 14 && task.kind === 'water') ||
+        !task.effect?.target
+      ) {
         task.effect = taskEffect(property, task.kind);
       }
     });
@@ -1101,6 +1408,43 @@ export function migrateState(raw: GameState): GameState | undefined {
     state.activeEvent = undefined;
   }
   if (raw.version < 6) state.researchTask = undefined;
+  if (
+    raw.version < 8 &&
+    state.researchTask?.kind === 'mow' &&
+    state.researchTask.targetLevel === 4
+  ) {
+    state.researchTask.targetLevel = 6;
+    state.researchTask.name = EQUIPMENT.mow[6].name;
+  }
+  if (
+    raw.version < 13 &&
+    state.researchTask?.kind === 'mow' &&
+    state.researchTask.targetLevel !== undefined
+  ) {
+    state.researchTask.name =
+      EQUIPMENT.mow[state.researchTask.targetLevel]?.name ??
+      state.researchTask.name;
+  }
+  if (
+    raw.version < 14 &&
+    state.researchTask?.kind === 'water' &&
+    state.researchTask.targetLevel !== undefined
+  ) {
+    state.researchTask.targetLevel =
+      state.researchTask.targetLevel === 0
+        ? 0
+        : state.researchTask.targetLevel === 1
+          ? 3
+          : 6;
+    state.researchTask.name =
+      EQUIPMENT.water[state.researchTask.targetLevel].name;
+  }
+  // Seit Version 11 kostet Lernen nur noch Zeit. Eine beim Speichern bereits
+  // bezahlte laufende Weiterbildung wird deshalb vollständig erstattet.
+  if (raw.version < 11 && state.researchTask?.cost) {
+    state.money += state.researchTask.cost;
+    state.researchTask.cost = 0;
+  }
   if (state.researchTask) state.researchTask.workerId ??= 0;
   state.version = SAVE_VERSION;
   return state;
@@ -1124,13 +1468,76 @@ function nextStepEnd(state: GameState, cursor: number, now: number) {
   }
   state.properties.forEach((property) => {
     property.tasks.forEach((task) => {
+      if (property.automationIntervention?.kind === task.kind) return;
       const { from, to } = taskWorkWindow(task);
-      for (const boundary of [from, to, task.endsAt]) {
+      for (const boundary of [
+        from,
+        task.automationInterruptionAt,
+        to,
+        task.endsAt,
+      ]) {
+        if (boundary === undefined) continue;
         if (boundary > cursor && boundary < stepEnd) stepEnd = boundary;
       }
     });
+    const interventionEnd = property.automationIntervention?.endsAt;
+    if (
+      interventionEnd &&
+      interventionEnd > cursor &&
+      interventionEnd < stepEnd
+    ) {
+      stepEnd = interventionEnd;
+    }
   });
   return stepEnd;
+}
+
+const AUTOMATION_INTERVENTION_SECONDS = 8;
+
+function triggerAutomationIntervention(
+  state: GameState,
+  property: GardenProperty,
+  task: PropertyTask,
+  at: number,
+) {
+  if (
+    task.kind === 'maintain' ||
+    property.automationIntervention ||
+    task.automationInterruptionAt === undefined ||
+    task.automationInterruptionAt > at
+  )
+    return;
+  property.automationIntervention = {
+    kind: task.kind,
+    pausedAt: task.automationInterruptionAt,
+  };
+  task.automationInterruptionAt = undefined;
+  const equipment = EQUIPMENT[task.kind][property.equipment[task.kind]].name;
+  addLog(
+    state,
+    `${property.name}: ${equipment} wartet auf einen kurzen manuellen Eingriff.`,
+    'warning',
+    at,
+  );
+}
+
+function completeAutomationIntervention(
+  state: GameState,
+  property: GardenProperty,
+  at: number,
+) {
+  const intervention = property.automationIntervention;
+  if (!intervention?.endsAt || intervention.endsAt > at) return;
+  const task = property.tasks.find((entry) => entry.kind === intervention.kind);
+  if (task) {
+    const pauseDuration = intervention.endsAt - intervention.pausedAt;
+    if (task.workEndsAt) task.workEndsAt += pauseDuration;
+    task.endsAt += pauseDuration;
+  }
+  const equipment =
+    EQUIPMENT[intervention.kind][property.equipment[intervention.kind]].name;
+  property.automationIntervention = undefined;
+  addLog(state, `${property.name}: ${equipment} arbeitet wieder.`, 'good', at);
 }
 
 function completeResearch(state: GameState, at: number) {
@@ -1175,8 +1582,15 @@ export function simulateGame(
         accrueTaskEffect(property, task, stepEnd);
       });
       advanceNaturalState(state, property, seconds);
+      completeAutomationIntervention(state, property, stepEnd);
+      activeTasks.forEach((task) =>
+        triggerAutomationIntervention(state, property, task, stepEnd),
+      );
       activeTasks.forEach((task) => {
-        if (task.endsAt <= stepEnd)
+        if (
+          task.endsAt <= stepEnd &&
+          property.automationIntervention?.kind !== task.kind
+        )
           completeTask(state, property, task, task.endsAt);
       });
       tryAutomation(state, property, stepEnd);
@@ -1254,7 +1668,8 @@ export function simulateGame(
     earned: Math.max(0, state.money - previousMoney),
     completed,
     critical: state.properties.filter(
-      (property) => property.satisfaction <= 20 || property.condition <= 20,
+      (property) =>
+        property.satisfaction <= 20 || equipmentCondition(property) <= 20,
     ).length,
   };
   return { state, summary };
@@ -1270,6 +1685,7 @@ export interface WorkerAssignment {
   propertyName?: string;
   task?: PropertyTask;
   researchTask?: ResearchTask;
+  automationIntervention?: AutomationIntervention;
 }
 
 export function workerAssignments(state: GameState): WorkerAssignment[] {
@@ -1293,13 +1709,58 @@ export function workerAssignments(state: GameState): WorkerAssignment[] {
       researchTask: state.researchTask,
     };
   }
+  state.properties.forEach((property) => {
+    const intervention = property.automationIntervention;
+    if (intervention?.workerId === undefined || !intervention.endsAt) return;
+    assignments[intervention.workerId] = {
+      workerId: intervention.workerId,
+      propertyId: property.id,
+      propertyName: property.name,
+      automationIntervention: intervention,
+    };
+  });
   return assignments;
 }
 
 export function availableWorkerId(state: GameState) {
   return workerAssignments(state).find(
-    (assignment) => !assignment.task && !assignment.researchTask,
+    (assignment) =>
+      !assignment.task &&
+      !assignment.researchTask &&
+      !assignment.automationIntervention,
   )?.workerId;
+}
+
+export function startAutomationIntervention(
+  source: GameState,
+  propertyId: string,
+): GameResult {
+  const state = clone(source);
+  const property = state.properties.find((item) => item.id === propertyId);
+  if (!property?.automationIntervention)
+    return { state, message: 'Die Automatik braucht gerade keine Hilfe.' };
+  if (property.automationIntervention.endsAt)
+    return { state, message: 'Ein Mitarbeiter kümmert sich bereits darum.' };
+  const workerId = availableWorkerId(state);
+  if (workerId === undefined)
+    return {
+      state,
+      message: 'Dafür wird kurz ein freier Mitarbeiter benötigt.',
+    };
+  const now = Date.now();
+  const intervention = property.automationIntervention;
+  intervention.startedAt = now;
+  intervention.endsAt = now + AUTOMATION_INTERVENTION_SECONDS * 1_000;
+  intervention.workerId = workerId;
+  const equipment =
+    EQUIPMENT[intervention.kind][property.equipment[intervention.kind]].name;
+  addLog(
+    state,
+    `${property.name}: Mitarbeiter ${workerId + 1} kümmert sich kurz um ${equipment}.`,
+    'neutral',
+    now,
+  );
+  return { state, message: 'Kurzer Eingriff gestartet.' };
 }
 
 export function startTask(
@@ -1322,7 +1783,7 @@ export function startTask(
 
   const equipment = EQUIPMENT[kind][property.equipment[kind]];
   const automated = Boolean(equipment.automated);
-  const usesWorker = !automated && !equipment.handsFree;
+  const usesWorker = !automated;
   const workerId = usesWorker ? availableWorkerId(state) : undefined;
   if (usesWorker && workerId === undefined) {
     return {
@@ -1330,13 +1791,27 @@ export function startTask(
       message: 'Alle Mitarbeiter sind bereits beschäftigt.',
     };
   }
-  if (kind === 'mow' && property.grass <= GRASS_FLOOR) {
-    return { state, message: 'Der Rasen ist bereits kurz genug.' };
+  if (kind === 'mow' && property.grass <= mowingTargetGrass(property)) {
+    return {
+      state,
+      message: isAutomated(property, 'mow')
+        ? 'Der Roboter hat seinen maximalen Pflegegrad bereits erreicht.'
+        : 'Der Rasen ist bereits kurz genug.',
+    };
   }
-  if (kind === 'water' && property.moisture >= 100) {
-    return { state, message: 'Der Boden ist bereits optimal gewässert.' };
+  if (kind === 'water' && property.moisture >= wateringTarget(property)) {
+    return {
+      state,
+      message: isAutomated(property, 'water')
+        ? 'Die Anlage hat ihren maximalen Bewässerungsgrad bereits erreicht.'
+        : 'Der Boden ist bereits optimal gewässert.',
+    };
   }
-  if (kind === 'maintain' && property.condition >= 98 && !isBroken(property)) {
+  if (
+    kind === 'maintain' &&
+    BREAKABLE.every((entry) => equipmentCondition(property, entry) >= 98) &&
+    !isBroken(property)
+  ) {
     return { state, message: 'Die Geräte sind bereits in bestem Zustand.' };
   }
 
@@ -1394,6 +1869,8 @@ export function cancelTask(
   task.workEndsAt = Math.min(now, to);
   task.workStartsAt = Math.min(from, task.workEndsAt);
   task.endsAt = now + taskWrapUpDuration(property, task.kind) * 1_000;
+  if (property.automationIntervention?.kind === task.kind)
+    property.automationIntervention = undefined;
 
   addLog(
     state,
@@ -1428,6 +1905,10 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
     grass: starter ? 63 : 48 + Math.random() * 30,
     moisture: starter ? 88 : 42 + Math.random() * 30,
     condition: starter ? 94 : 88,
+    equipmentCondition: {
+      mow: starter ? 94 : 88,
+      water: starter ? 94 : 88,
+    },
     satisfaction: 78,
     equipment: { mow: 0, water: 0, maintain: 0 },
     broken: { mow: false, water: false },
@@ -1494,8 +1975,6 @@ export function unlockEquipment(source: GameState, kind: TaskKind): GameResult {
       message: `Dafür brauchst du Reputation ${item.reputation}.`,
     };
   }
-  if (state.money < item.unlockCost)
-    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   if (state.researchTask)
     return { state, message: 'Es läuft bereits eine Weiterbildung.' };
   const workerId = availableWorkerId(state);
@@ -1507,14 +1986,13 @@ export function unlockEquipment(source: GameState, kind: TaskKind): GameResult {
   }
   const now = Date.now();
   const duration = researchDurationMs(item.reputation);
-  state.money -= item.unlockCost;
   state.researchTask = {
     kind,
     name: item.name,
     targetLevel: nextLevel,
     startedAt: now,
     endsAt: now + duration,
-    cost: item.unlockCost,
+    cost: 0,
     workerId,
   };
   addLog(state, `${item.name}: Lernen begonnen.`, 'neutral', now);
@@ -1546,6 +2024,11 @@ export function installEquipment(
     return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   state.money -= item.installCost;
   property.equipment[kind] = targetLevel;
+  if (kind !== 'maintain') {
+    property.equipmentCondition[kind] = 100;
+    property.broken[kind] = false;
+    syncEquipmentCondition(property);
+  }
   addLog(state, `${property.name}: ${item.name} wurde installiert.`, 'good');
   return {
     state,
@@ -1560,8 +2043,8 @@ export function unlockChemistry(
   const state = clone(source);
   const config =
     kind === 'fertilizer'
-      ? { name: 'Dünger', cost: 700, reputation: 8 }
-      : { name: 'Unkrautpflege', cost: 1_200, reputation: 15 };
+      ? { name: 'Dünger', reputation: 8 }
+      : { name: 'Unkrautpflege', reputation: 15 };
   if (state.chemistryUnlocked[kind])
     return { state, message: `${config.name} ist bereits freigeschaltet.` };
   if (kind === 'weedControl' && !state.chemistryUnlocked.fertilizer) {
@@ -1576,8 +2059,6 @@ export function unlockChemistry(
       message: `Dafür brauchst du Reputation ${config.reputation}.`,
     };
   }
-  if (state.money < config.cost)
-    return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   if (state.researchTask)
     return { state, message: 'Es läuft bereits eine Weiterbildung.' };
   const workerId = availableWorkerId(state);
@@ -1589,13 +2070,12 @@ export function unlockChemistry(
   }
   const now = Date.now();
   const duration = researchDurationMs(config.reputation);
-  state.money -= config.cost;
   state.researchTask = {
     kind,
     name: config.name,
     startedAt: now,
     endsAt: now + duration,
-    cost: config.cost,
+    cost: 0,
     workerId,
   };
   addLog(state, `${config.name}: Lernen begonnen.`, 'neutral', now);
@@ -1650,12 +2130,17 @@ export function propertyStatus(property: GardenProperty) {
   if (property.rescueUntil || property.satisfaction <= 25) {
     return { label: 'Kritisch', tone: 'danger' as const };
   }
-  if (property.tasks.length > 0)
+  if (
+    property.automationIntervention &&
+    !property.automationIntervention.endsAt
+  )
+    return { label: 'Blockiert', tone: 'danger' as const };
+  if (property.tasks.length > 0 || property.automationIntervention)
     return { label: 'In Arbeit', tone: 'info' as const };
   if (isBroken(property))
     return { label: 'Blockiert', tone: 'danger' as const };
   if (
-    property.condition < 50 ||
+    equipmentCondition(property) < 50 ||
     property.moisture < 50 ||
     property.grass >= 60
   ) {
@@ -1671,7 +2156,7 @@ export function propertyMetricPercent(
   if (kind === 'mow') {
     return Math.min(100, Math.max(0, ((150 - property.grass) / 130) * 100));
   }
-  return kind === 'water' ? property.moisture : property.condition;
+  return kind === 'water' ? property.moisture : equipmentCondition(property);
 }
 
 export function grassHint(value: number) {

@@ -65,9 +65,14 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_PATHS.map(scopeUrl)))
-      .then(() => self.skipWaiting()),
+      .then((cache) => cache.addAll(PRECACHE_PATHS.map(scopeUrl))),
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+  }
 });
 
 self.addEventListener('activate', (event) => {

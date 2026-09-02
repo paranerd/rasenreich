@@ -142,7 +142,7 @@
   padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--border-hair);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
 }
 
 .rail__item--selected {
@@ -197,5 +197,5 @@
 .rail__dot {
   width: 9px;
   height: 9px;
-  border-radius: 2px;
+  border-radius: var(--radius);
 }

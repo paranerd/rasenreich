@@ -10,26 +10,16 @@ import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/latin-600.css';
 
 import Page from '@/app/page';
+import { PwaUpdateProvider } from '@/components/pwa-update';
 import '@/styles/main.scss';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Wurzelelement #root fehlt');
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker
-      .register(`${import.meta.env.BASE_URL}sw.js`, {
-        scope: import.meta.env.BASE_URL,
-      })
-      .catch(() => {
-        // Die normale Web-App bleibt nutzbar, falls der Browser keine
-        // Service Worker zulässt oder die Installation blockiert.
-      });
-  });
-}
-
 createRoot(container).render(
   <StrictMode>
-    <Page />
+    <PwaUpdateProvider>
+      <Page />
+    </PwaUpdateProvider>
   </StrictMode>,
 );

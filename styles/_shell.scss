@@ -56,6 +56,10 @@
   overflow-y: auto;
 }
 
+.app__scroll--locked {
+  overflow: hidden;
+}
+
 .app__loading {
   display: grid;
   min-height: 100vh;
@@ -70,7 +74,7 @@
   height: 40px;
   margin: 0 auto 12px;
   background: var(--logo-stripes);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   animation: blink 2s ease-in-out infinite;
 }
 
@@ -106,7 +110,7 @@
 
 .header__brand {
   width: fit-content;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
 }
 
 .header__left {
@@ -178,7 +182,7 @@
   width: 8px;
   height: 8px;
   background: var(--idle);
-  border-radius: 999px;
+  border-radius: var(--radius);
 }
 
 .worker-status--mow .worker-status__dot {
@@ -216,7 +220,7 @@
   width: 30px;
   height: 30px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius);
   transition:
     background-color 0.15s,
     transform 0.15s;
@@ -267,7 +271,7 @@
   width: 28px;
   height: 28px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius);
   transition:
     background-color 0.15s,
     transform 0.15s;
@@ -414,7 +418,7 @@
   color: var(--primary-contrast);
   background: var(--destructive);
   border: 2px solid var(--paper);
-  border-radius: 999px;
+  border-radius: var(--radius);
   place-items: center;
 }
 

@@ -47,7 +47,7 @@
   width: 8px;
   height: 8px;
   background: var(--tone);
-  border-radius: 999px;
+  border-radius: var(--radius);
 }
 
 /// Die Leiste bleibt vollständig stehen, damit die Schaltflächen nicht springen.
@@ -77,7 +77,7 @@
   white-space: nowrap;
   background: var(--paper);
   border: 1px solid var(--border-chip);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
 }
 
 .filter--on {

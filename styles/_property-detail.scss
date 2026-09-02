@@ -24,7 +24,7 @@
   min-height: 164px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius);
 
   @include lg {
     flex: 1;
@@ -164,7 +164,7 @@
   padding: 14px;
   background: var(--bg-bad);
   border: 1px solid var(--line-bad);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius);
 }
 
 .rescue__icon {
@@ -186,6 +186,40 @@
 }
 
 .rescue__note {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.automation-help {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: var(--bg-warn);
+  border: 1px solid var(--line-warn);
+  border-radius: var(--radius);
+}
+
+.automation-help__icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--tone-warn);
+}
+
+.automation-help__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.automation-help__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.automation-help__note {
   font-size: 12px;
   color: var(--ink-soft);
 }
@@ -270,6 +304,36 @@
     flex: 1;
     justify-content: center;
   }
+}
+
+.condition-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.condition-breakdown__item {
+  @include num;
+
+  padding: 5px 8px;
+  font-size: 9.5px;
+  color: var(--ink-mute);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+
+  strong {
+    font-weight: 600;
+    color: var(--tone-ok);
+  }
+}
+
+.condition-breakdown__item--due strong {
+  color: var(--tone-warn);
+}
+
+.condition-breakdown__item--broken strong {
+  color: var(--tone-bad);
 }
 
 // ------------------------------------------------------------ Aktionsknöpfe

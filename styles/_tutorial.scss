@@ -44,7 +44,7 @@
   position: fixed;
   z-index: 80;
   border: 2px solid rgb(210 235 191 / 92%);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow:
     0 0 0 9999px rgb(22 29 18 / 64%),
     0 0 0 4px rgb(92 143 58 / 30%),
@@ -110,7 +110,7 @@
   color: var(--ink-mute);
   background: rgb(255 253 247 / 88%);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   place-items: center;
 
   &:hover {
@@ -146,7 +146,7 @@
   height: 3px;
   overflow: hidden;
   background: var(--track);
-  border-radius: 999px;
+  border-radius: var(--radius);
 
   span {
     display: block;
@@ -257,7 +257,7 @@
     color: var(--primary);
     background: var(--surface);
     border: 1px solid var(--border-soft);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
   }
 
   svg {

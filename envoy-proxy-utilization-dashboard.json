@@ -1,0 +1,1832 @@
+{
+  "annotations": [
+    {
+      "kind": "AnnotationQuery",
+      "spec": {
+        "query": {
+          "kind": "DataQuery",
+          "group": "datasource",
+          "version": "v0",
+          "datasource": {
+            "name": "grafana"
+          },
+          "spec": {
+            "limit": 100,
+            "matchAny": false,
+            "tags": [],
+            "type": "dashboard"
+          }
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "builtIn": true,
+        "legacyOptions": {
+          "type": "dashboard"
+        }
+      }
+    }
+  ],
+  "cursorSync": "Crosshair",
+  "description": "Auslastung der Envoy-Gateway-Proxys nach Kubernetes-Cluster und Namespace.",
+  "editable": true,
+  "elements": {
+    "panel-1": {
+      "kind": "Panel",
+      "spec": {
+        "id": 1,
+        "title": "Live Proxys",
+        "description": "Anzahl der aktuell als live gemeldeten Envoy-Prozesse.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum(envoy_server_live{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"})",
+                      "format": "time_series",
+                      "instant": true,
+                      "interval": "",
+                      "legendFormat": "Live",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "stat",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "showPercentChange": false,
+              "wideLayout": true,
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "fields": "",
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "thresholds"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-11": {
+      "kind": "Panel",
+      "spec": {
+        "id": 11,
+        "title": "Aktive Requests",
+        "description": "Anzahl der aktuell von Envoy bearbeiteten Downstream-HTTP-Requests. Im Leerlauf sollte dieser Wert 0 sein.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum(envoy_http_downstream_rq_active{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"})",
+                      "format": "time_series",
+                      "instant": true,
+                      "interval": "",
+                      "legendFormat": "Aktiv",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "stat",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "showPercentChange": false,
+              "wideLayout": true,
+              "colorMode": "value",
+              "graphMode": "none",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "fields": "",
+                "calcs": [
+                  "lastNotNull"
+                ],
+                "values": false
+              },
+              "textMode": "auto"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 10
+                    },
+                    {
+                      "color": "red",
+                      "value": 100
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "thresholds"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-2": {
+      "kind": "Panel",
+      "spec": {
+        "id": 2,
+        "title": "Downstream Traffic",
+        "description": "Anfragen pro Sekunde, die die Envoy-Proxys von Clients empfangen.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (pod) (rate(envoy_http_downstream_rq_total{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval]))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{pod}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "reqps"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-3": {
+      "kind": "Panel",
+      "spec": {
+        "id": 3,
+        "title": "Aktive Downstream-Verbindungen",
+        "description": "Aktive Client-Verbindungen nach Proxy-Pod und Listener-Adresse. Keep-alive und HTTP/2 zählen auch ohne laufenden Request.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (pod, envoy_listener_address) (envoy_listener_downstream_cx_active{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"})",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{pod}} · {{envoy_listener_address}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-4": {
+      "kind": "Panel",
+      "spec": {
+        "id": 4,
+        "title": "Downstream-Latenz",
+        "description": "P50, P95 und P99 der Bearbeitungszeit eingehender HTTP-Anfragen.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "histogram_quantile(0.50, sum by (le) (rate(envoy_http_downstream_rq_time_bucket{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval])))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "P50",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "histogram_quantile(0.95, sum by (le) (rate(envoy_http_downstream_rq_time_bucket{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval])))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "P95",
+                      "range": true
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "histogram_quantile(0.99, sum by (le) (rate(envoy_http_downstream_rq_time_bucket{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval])))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "P99",
+                      "range": true
+                    }
+                  },
+                  "refId": "C",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "ms"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-5": {
+      "kind": "Panel",
+      "spec": {
+        "id": 5,
+        "title": "Upstream-5xx-Fehlerquote",
+        "description": "Anteil der Anfragen, für die ein Backend eine 5xx-Antwort liefert.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "100 * sum(rate(envoy_cluster_upstream_rq_xx{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\", envoy_response_code_class=\"5\"}[$__rate_interval])) / clamp_min(sum(rate(envoy_cluster_upstream_rq_total{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval])), 0.000001)",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "5xx-Anteil",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 5
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "thresholds"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "max": 100,
+                "min": 0,
+                "unit": "percent"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-6": {
+      "kind": "Panel",
+      "spec": {
+        "id": 6,
+        "title": "CPU-Verbrauch",
+        "description": "CPU-Verbrauch der Envoy-Container in CPU-Kernen.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\", container=\"envoy\"}[$__rate_interval]))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{pod}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "cores"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-7": {
+      "kind": "Panel",
+      "spec": {
+        "id": 7,
+        "title": "Speicherverbrauch",
+        "description": "Working Set der Envoy-Container und von Envoy selbst allozierter Speicher.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (pod) (container_memory_working_set_bytes{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\", container=\"envoy\"})",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "Container {{pod}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (pod) (envoy_server_memory_allocated{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"})",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "Envoy allocated {{pod}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "bytes"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-8": {
+      "kind": "Panel",
+      "spec": {
+        "id": 8,
+        "title": "Upstream Traffic nach Backend-Cluster",
+        "description": "Anfragen pro Sekunde von Envoy an die Backend-Cluster.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_total{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval]))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{envoy_cluster_name}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "reqps"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-9": {
+      "kind": "Panel",
+      "spec": {
+        "id": 9,
+        "title": "Upstream-P95-Latenz",
+        "description": "P95-Latenz zwischen Envoy und den Backend-Clustern.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "histogram_quantile(0.95, sum by (le, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_time_bucket{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval])))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{envoy_cluster_name}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "ms"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-10": {
+      "kind": "Panel",
+      "spec": {
+        "id": 10,
+        "title": "Backend-Endpoint-Gesundheit",
+        "description": "Gesunde und insgesamt bekannte Backend-Endpoints je Envoy-Cluster.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (envoy_cluster_name) (envoy_cluster_membership_healthy{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"})",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "Gesund {{envoy_cluster_name}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (envoy_cluster_name) (envoy_cluster_membership_total{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"})",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "Gesamt {{envoy_cluster_name}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "B",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "min"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "short"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    },
+    "panel-12": {
+      "kind": "Panel",
+      "spec": {
+        "id": 12,
+        "title": "Neue Downstream-Verbindungen/s",
+        "description": "Neu aufgebaute Downstream-Verbindungen pro Sekunde nach Pod und Listener. Ein dauerhaftes Keep-alive liefert ungefähr 0; regelmäßige Ausschläge können auf Health Checks hindeuten.",
+        "links": [],
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "query": {
+                    "kind": "DataQuery",
+                    "group": "prometheus",
+                    "version": "v0",
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": false,
+                      "expr": "sum by (pod, envoy_listener_address) (rate(envoy_listener_downstream_cx_total{cluster=~\"$Cluster\", kubernetes_namespace=~\"$Namespace\"}[$__rate_interval]))",
+                      "format": "time_series",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{pod}} · {{envoy_listener_address}}",
+                      "range": true
+                    }
+                  },
+                  "refId": "A",
+                  "hidden": false
+                }
+              }
+            ],
+            "transformations": [],
+            "queryOptions": {}
+          }
+        },
+        "vizConfig": {
+          "kind": "VizConfig",
+          "group": "timeseries",
+          "version": "11.0.0",
+          "spec": {
+            "options": {
+              "legend": {
+                "calcs": [
+                  "lastNotNull",
+                  "max"
+                ],
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "maxHeight": 600,
+                "mode": "multi",
+                "sort": "desc"
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  },
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "lineWidth": 2,
+                  "showPoints": "never"
+                },
+                "unit": "ops"
+              },
+              "overrides": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "layout": {
+    "kind": "GridLayout",
+    "spec": {
+      "items": [
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 5,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-1"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 3,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-11"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 4,
+            "y": 0,
+            "width": 10,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-2"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 14,
+            "y": 0,
+            "width": 10,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-3"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 0,
+            "y": 8,
+            "width": 12,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-4"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 12,
+            "y": 8,
+            "width": 12,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-5"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 0,
+            "y": 16,
+            "width": 8,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-6"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 8,
+            "y": 16,
+            "width": 8,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-7"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 16,
+            "y": 16,
+            "width": 8,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-8"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 0,
+            "y": 24,
+            "width": 12,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-9"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 12,
+            "y": 24,
+            "width": 12,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-10"
+            }
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "x": 0,
+            "y": 32,
+            "width": 24,
+            "height": 8,
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-12"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "links": [],
+  "liveNow": false,
+  "preload": false,
+  "tags": [
+    "envoy",
+    "envoy-gateway",
+    "proxy",
+    "prometheus"
+  ],
+  "timeSettings": {
+    "timezone": "browser",
+    "from": "now-1h",
+    "to": "now",
+    "autoRefresh": "30s",
+    "autoRefreshIntervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ],
+    "hideTimepicker": false,
+    "fiscalYearStartMonth": 0
+  },
+  "title": "Envoy Proxy – Auslastung und Endpoints",
+  "variables": [
+    {
+      "kind": "DatasourceVariable",
+      "spec": {
+        "name": "DS_PROMETHEUS",
+        "pluginId": "prometheus",
+        "refresh": "onDashboardLoad",
+        "regex": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [],
+        "multi": false,
+        "includeAll": false,
+        "label": "Prometheus",
+        "hide": "dontHide",
+        "skipUrlSync": false,
+        "description": "Prometheus-Datenquelle",
+        "allowCustomValue": false
+      }
+    },
+    {
+      "kind": "QueryVariable",
+      "spec": {
+        "name": "Cluster",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "label": "Cluster",
+        "hide": "dontHide",
+        "refresh": "onDashboardLoad",
+        "skipUrlSync": false,
+        "description": "Kubernetes-/Prometheus-Cluster",
+        "query": {
+          "kind": "DataQuery",
+          "group": "prometheus",
+          "version": "v0",
+          "datasource": {
+            "name": "${DS_PROMETHEUS}"
+          },
+          "spec": {
+            "qryType": 1,
+            "query": "label_values(envoy_server_live, cluster)",
+            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+          }
+        },
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": "alphabeticalAsc",
+        "definition": "label_values(envoy_server_live, cluster)",
+        "options": [],
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "allowCustomValue": true
+      }
+    },
+    {
+      "kind": "QueryVariable",
+      "spec": {
+        "name": "Namespace",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "label": "Namespace",
+        "hide": "dontHide",
+        "refresh": "onDashboardLoad",
+        "skipUrlSync": false,
+        "description": "Kubernetes-Namespace",
+        "query": {
+          "kind": "DataQuery",
+          "group": "prometheus",
+          "version": "v0",
+          "datasource": {
+            "name": "${DS_PROMETHEUS}"
+          },
+          "spec": {
+            "qryType": 1,
+            "query": "label_values(envoy_server_live{cluster=~\"$Cluster\"}, kubernetes_namespace)",
+            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+          }
+        },
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": "alphabeticalAsc",
+        "definition": "label_values(envoy_server_live{cluster=~\"$Cluster\"}, kubernetes_namespace)",
+        "options": [],
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "allowCustomValue": true
+      }
+    }
+  ]
+}
