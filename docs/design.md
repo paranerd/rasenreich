@@ -11,7 +11,7 @@ Der Spieler hat 3 Aufgaben:
 - Bewässern
 - Wartung
 
-Mit steigender Reputation erhält der Spieler im Laufe des Spiels Angebote für weitere Aufträge auf größeren Grundstücken. Dabei steigt das Einkommen mit der zu mähenden Fläche, aber die Dauer des Arbeiten wächst nicht 1:1 mit (eine doppelt so große Fläche zu mähen / bewässern / warten dauert nicht doppelt so lange, weil Rüstzeiten nahezu konstant bleiben)
+Mit steigender Reputation erhält der Spieler im Laufe des Spiels weitere Aufträge auf größeren Grundstücken. Dabei steigt das Einkommen mit der zu mähenden Fläche, aber die Dauer des Arbeiten wächst nicht 1:1 mit (eine doppelt so große Fläche zu mähen / bewässern / warten dauert nicht doppelt so lange, weil Rüstzeiten nahezu konstant bleiben)
 
 Jedes Grundstück hat seinen eigenen Rasenmäher, seine eigene Bewässerungstechnik etc. Jedes ausfallfähige Gerät besitzt einen eigenen Wartungszustand. Schlecht gepflegte Geräte können kaputt gehen und müssen dann repariert werden, was Zeit und Ersatzteile kostet.
 
@@ -102,14 +102,18 @@ Alle manuellen Mäher besitzen 100 % Zuverlässigkeit und erreichen einen maxima
 Alle manuellen Bewässerer erreichen 100 % Zuverlässigkeit und einen Bewässerungsgrad von 100 %, belegen aber während des gesamten Durchgangs einen Mitarbeiter. Automatische Anlagen starten selbstständig, benötigen im Normalbetrieb keinen Mitarbeiter und besitzen 70 %, 80 %, 90 % beziehungsweise 95 % Zuverlässigkeit. Bei einem Zuverlässigkeitsfehler pausiert die Anlage und benötigt einen kurzen manuellen Eingriff. Die angezeigte Geschwindigkeit ist absolut relativ zum Plätscherfix.
 
 - Wartung
-  - Einfache Werkzeugtasche
-  - Besseres Werkzeug
-  - Akkuwerkzeug (schneller)
-  - Serviceteam (Automation)
-    - Ausbau
-      - Rund-um-die-Uhr Service
-      - Schneller
-      - Bessere Qualität
+  - FlickFix Tasche: Grundwerkzeug, 100 % Geschwindigkeit
+  - Ratschen-Rakete 200: sortierter Ratschenkoffer, 125 % Geschwindigkeit
+  - Schraubkraft 500: Präzisionswerkzeug und Messgeräte, 160 % Geschwindigkeit
+  - AkkuBlitz 1000: kräftige Akkuwerkzeuge, 220 % Geschwindigkeit
+  - RollWerk 3000: mobiler Werkstattwagen, 300 % Geschwindigkeit
+  - PitStop Deluxe: Diagnosestation und Profiwerkzeug, 400 % Geschwindigkeit
+  - ServiceSprint Easy: 80 % Geschwindigkeit, automatische Wartung bei 35 %
+  - FixFleet Pro: 100 % Geschwindigkeit, automatische Wartung bei 50 %
+  - RepairRadar Deluxe: 125 % Geschwindigkeit, automatische Wartung bei 65 %
+  - TerraCare Ultra: 160 % Geschwindigkeit, automatische Wartung bei 80 %
+
+Alle Wartungsstufen stellen den technischen Zustand vollständig auf 100 % her. Die ersten sechs Stufen belegen während des gesamten Vorgangs einen Mitarbeiter. Die vier Service-Stufen arbeiten automatisch, sobald mindestens eines der Geräte seinen Grenzwert erreicht, und starten zusätzlich sofort, wenn ein Gerät bereits ausgefallen ist. Die angezeigte Reparaturgeschwindigkeit ist absolut relativ zur FlickFix Tasche.
 
 ## Events
 
@@ -147,11 +151,12 @@ Das Spiel soll auf HTML, TypeScript und SCSS basieren.
 - Ein manuell gestarteter Vorgang läuft auch bei geschlossenem Spiel weiter.
 - Reise- und Rüstzeiten werden nicht separat dargestellt, sondern sind in den Aufgabendauern enthalten.
 - Der Gartenbauer stellt das Equipment auf jedem Grundstück selbst. Freischaltungen gelten global, die Anschaffung erfolgt anschließend pro Grundstück.
-- Grundstücke sind dauerhafte Kundenverträge. Angebote können angenommen oder abgelehnt werden.
-- Es gibt kein künstliches Vertragslimit. Zu viele Verträge können jedoch zu Überlastung und sinkender Kundenzufriedenheit führen.
+- Grundstücke sind Kundenverträge. Aufträge können angenommen oder abgelehnt und laufende Verträge aktiv gekündigt werden.
+- Jeder Mitarbeiter bringt eine eigene zusätzliche Grundstückskapazität mit: 3, 4, 5 und 6 Plätze. Damit wächst die Gesamtkapazität des Betriebs auf 3, 7, 12 und 18 gleichzeitig betreute Grundstücke. Ist sie ausgeschöpft, kann kein weiterer Auftrag angenommen werden.
+- Bei einer aktiven Kündigung wird der Restwert der aktuell installierten Technik gutgeschrieben: Er beginnt bei 70 % des Kaufpreises und sinkt über 30 reale Tage linear auf dauerhaft 15 %. Die Kündigung muss durch einen zweiten Klick direkt im Button bestätigt werden.
 - Jedes Grundstück besitzt eine eigene Kundenzufriedenheit. Sie ergibt sich direkt aus den drei Werten — 55 % Rasenschnitt, 35 % Bewässerung, 10 % Wartung — und folgt diesem Zielwert träge, damit sie nicht springt und Zeit zum Gegensteuern bleibt. Anspruchsvolle Kunden sinken schneller, als sie sich erholen.
-- Die globale Reputation ergibt sich aus guter Arbeit und schaltet bessere Angebote sowie Technik frei.
-- Bei starker Verwahrlosung können Verträge verloren gehen. Das erste Grundstück bleibt immer als Sicherheitsnetz erhalten.
+- Die globale Reputation ergibt sich aus guter Arbeit und schaltet bessere Aufträge sowie Technik frei.
+- Bei starker Verwahrlosung können Verträge verloren gehen. Das erste Grundstück ist vor automatischem Verlust geschützt, kann aber bewusst gekündigt werden.
 - Während der Offline-Zeit wird kein Vertrag direkt gekündigt. Kritische Verträge erhalten beim nächsten Besuch eine zehnminütige Rettungsfrist.
 - Geld kann nie negativ werden.
 
@@ -160,6 +165,8 @@ Das Spiel soll auf HTML, TypeScript und SCSS basieren.
 - Der Kunde bezahlt für das Mähen und für das Bewässern, jeweils anteilig zur geleisteten Arbeit.
 - Bewässerung und Wartung sichern zukünftige Mäherträge, bringen aber nicht direkt Geld ein.
 - Wartung kostet Geld und Zeit.
+- Bei selbst gekündigten Verträgen wird der altersabhängige Restwert der installierten Technik ausgezahlt. Verbrauchte Pflegeprodukte und laufende Arbeiten werden nicht erstattet.
+- Neue Aufträge zeigen als Vergleichswert den maximalen Ertrag einer vollständigen Pflegerunde aus Mähen und Bewässern.
 - Geldbeträge bleiben als nachvollziehbare Eurobeträge dargestellt und können langfristig bis in den Millionenbereich wachsen.
 - Frühes Mähen gegen anteilige Bezahlung ist eine legitime Strategie.
 

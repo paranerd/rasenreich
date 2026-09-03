@@ -1,6 +1,6 @@
 @use 'mixins' as *;
 
-/// Rahmen der ganzseitigen Ansichten (Angebote, Upgrades).
+/// Rahmen der ganzseitigen Ansichten (Aufträge, Upgrades).
 .view {
   display: flex;
   flex-direction: column;
@@ -23,6 +23,10 @@
   justify-content: space-between;
 }
 
+.view__head--offers {
+  flex-wrap: nowrap;
+}
+
 .view__titles {
   display: flex;
   flex-direction: column;
@@ -38,6 +42,39 @@
   font-weight: 700;
   line-height: 1.2;
   color: var(--ink);
+}
+
+.offer-capacity {
+  @include num;
+
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  strong {
+    color: var(--ink);
+  }
+}
+
+.offer-capacity--full {
+  color: var(--tone-bad);
+  background: var(--bg-bad);
+  border-color: var(--line-bad);
+
+  strong {
+    color: var(--tone-bad);
+  }
 }
 
 .empty {
@@ -78,7 +115,7 @@
   color: var(--ink-soft);
 }
 
-// ------------------------------------------------------------------ Angebote
+// ------------------------------------------------------------------ Aufträge
 
 .offers {
   display: grid;
@@ -146,7 +183,7 @@
 }
 
 .stat {
-  padding: 12px;
+  padding: 8px 12px;
   background: var(--surface);
   border-radius: var(--radius);
 }
@@ -158,7 +195,6 @@
 .stat__value {
   @include num;
 
-  margin-top: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--ink);
@@ -940,18 +976,6 @@
   font-weight: 700;
   line-height: 1.25;
   color: var(--ink);
-}
-
-.upgrade-badge {
-  @include label(8px, 0.06em);
-
-  display: inline-block;
-  margin-left: 7px;
-  padding: 4px 6px;
-  color: var(--panel-tone);
-  vertical-align: 1px;
-  background: color-mix(in srgb, var(--panel-tone) 10%, var(--paper));
-  border-radius: var(--radius-xs);
 }
 
 .upgrade-effect {

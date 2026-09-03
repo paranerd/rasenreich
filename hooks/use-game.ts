@@ -19,6 +19,7 @@ import {
   startAutomationIntervention,
   startTask,
   TaskKind,
+  terminateContract,
   unlockChemistry,
   unlockEquipment,
 } from '@/lib/game';
@@ -299,6 +300,8 @@ export function useGame() {
       run((current) => acceptOffer(current, offerId)),
     declineOffer: (offerId: string) =>
       run((current) => declineOffer(current, offerId)),
+    terminateContract: (propertyId: string) =>
+      run((current) => terminateContract(current, propertyId)),
     unlockEquipment: (kind: TaskKind) =>
       run((current) => unlockEquipment(current, kind)),
     installEquipment: (propertyId: string, kind: TaskKind) =>

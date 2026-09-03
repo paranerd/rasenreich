@@ -12,6 +12,7 @@ import {
   CloudSun,
   Droplet,
   FlaskConical,
+  LandPlot,
   LayoutDashboard,
   LockKeyhole,
   RefreshCw,
@@ -35,8 +36,10 @@ import { Toast, useGame } from '@/hooks/use-game';
 import {
   ACTION_LABELS,
   availableWorkerId,
+  customerDemandLabel,
   EQUIPMENT,
   equipmentCondition,
+  equipmentResidualValue,
   EquipmentLevel,
   formatDuration,
   formatMoney,
@@ -48,7 +51,9 @@ import {
   maintenanceCost,
   mowingPayout,
   mowingPayoutShare,
+  offerMaxCareRoundPayout,
   propertyMetricPercent,
+  propertyCapacity,
   PropertyTask,
   propertyStatus,
   researchDurationMs,
@@ -544,7 +549,7 @@ function SideNav({
 }) {
   const nav = [
     { id: 'overview' as const, label: 'Betrieb', icon: LayoutDashboard },
-    { id: 'offers' as const, label: 'Angebote', icon: BriefcaseBusiness },
+    { id: 'offers' as const, label: 'Aufträge', icon: BriefcaseBusiness },
     { id: 'upgrades' as const, label: 'Upgrades', icon: ShoppingBag },
   ];
 
@@ -706,7 +711,7 @@ function HeaderInfoDialog({
             </h2>
             <p className="header-info__lead">
               Gute Arbeit steigert deinen Ruf. Höhere Stufen bringen neue
-              Angebote und schalten besseres Wissen frei.
+              Aufträge und schalten besseres Wissen frei.
             </p>
           </>
         ) : (
@@ -1429,6 +1434,7 @@ function PropertyDetail({
   onInstall,
   onAutomationIntervention,
   onOpenResearch,
+  onTerminateContract,
 }: {
   game: GameState;
   property: GardenProperty;
@@ -1438,7 +1444,20 @@ function PropertyDetail({
   onInstall: (kind: TaskKind) => void;
   onAutomationIntervention: () => void;
   onOpenResearch: () => void;
+  onTerminateContract: () => void;
 }) {
+  const [pendingTerminationId, setPendingTerminationId] = useState<
+    string | null
+  >(null);
+  const terminationPending = pendingTerminationId === property.id;
+  const residualValue = equipmentResidualValue(property, game.lastUpdatedAt);
+
+  useEffect(() => {
+    if (!pendingTerminationId) return;
+    const timer = window.setTimeout(() => setPendingTerminationId(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [pendingTerminationId]);
+
   return (
     <section
       className="detail"
@@ -1496,24 +1515,6 @@ function PropertyDetail({
               </div>
             ))}
           </div>
-          <div className="condition-breakdown" aria-label="Gerätezustände">
-            {(['mow', 'water'] as const).map((kind) => {
-              const value = equipmentCondition(property, kind);
-              const broken = property.broken[kind];
-              return (
-                <span
-                  key={kind}
-                  className={`condition-breakdown__item ${broken ? 'condition-breakdown__item--broken' : value < 70 ? 'condition-breakdown__item--due' : ''}`}
-                  title={EQUIPMENT[kind][property.equipment[kind]].name}
-                >
-                  {kind === 'mow' ? 'Mäher' : 'Bewässerung'}{' '}
-                  <strong>
-                    {broken ? 'defekt' : `${Math.round(value)} %`}
-                  </strong>
-                </span>
-              );
-            })}
-          </div>
         </div>
 
         <div
@@ -1538,6 +1539,37 @@ function PropertyDetail({
             onInstall={onInstall}
             onOpenResearch={onOpenResearch}
           />
+        </div>
+
+        <div className="panel__section panel__section--divided">
+          <SectionLabel>Vertrag</SectionLabel>
+          <div className="contract-management">
+            <p className="contract-management__text">
+              Die Kündigung beendet alle laufenden Arbeiten auf diesem
+              Grundstück.
+            </p>
+            <button
+              type="button"
+              className={`action action--contract ${terminationPending ? 'action--on' : ''}`}
+              aria-live="polite"
+              onClick={() => {
+                if (terminationPending) {
+                  onTerminateContract();
+                  return;
+                }
+                setPendingTerminationId(property.id);
+              }}
+            >
+              <span className="action__label">
+                {terminationPending
+                  ? 'Kündigung bestätigen'
+                  : 'Vertrag kündigen'}
+              </span>
+              <span className="action__meta">
+                Restwert {formatMoney(residualValue)}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1654,12 +1686,24 @@ function OffersView({
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
 }) {
+  const capacity = propertyCapacity(game.workers);
+  const capacityReached = game.properties.length >= capacity;
+
   return (
     <section className="view">
-      <div className="view__head">
+      <div className="view__head view__head--offers">
         <div className="view__titles">
           <span className="view__eyebrow">Neue Stammkunden</span>
-          <h2 className="view__title">Vertragsangebote</h2>
+          <h2 className="view__title">Aufträge</h2>
+        </div>
+        <div
+          className={`offer-capacity ${capacityReached ? 'offer-capacity--full' : ''}`}
+          aria-label={`${game.properties.length} von ${capacity} Grundstücken belegt`}
+        >
+          <LandPlot aria-hidden="true" />
+          <span>
+            <strong>{game.properties.length}</strong>/{capacity}
+          </span>
         </div>
       </div>
 
@@ -1701,10 +1745,13 @@ function OffersView({
                     {offer.size.toLocaleString('de-DE')} m²
                   </p>
                 </div>
-                <div className="stat">
-                  <span className="stat__label">Voller Schnitt</span>
+                <div
+                  className="stat"
+                  title="Maximaler Ertrag aus vollständigem Mähen und Bewässern"
+                >
+                  <span className="stat__label">Vollpflege</span>
                   <p className="stat__value">
-                    {formatMoney(offer.payout * 1.2)}
+                    {formatMoney(offerMaxCareRoundPayout(offer))}
                   </p>
                 </div>
               </div>
@@ -1715,7 +1762,7 @@ function OffersView({
                     {offer.growthFactor > 1.1
                       ? 'Schnell'
                       : offer.growthFactor < 0.98
-                        ? 'Ruhig'
+                        ? 'Langsam'
                         : 'Normal'}
                   </dd>
                 </div>
@@ -1731,7 +1778,7 @@ function OffersView({
                 </div>
                 <div className="offer__fact">
                   <dt>Anspruch</dt>
-                  <dd>{offer.customerDemand > 1.2 ? 'Hoch' : 'Normal'}</dd>
+                  <dd>{customerDemandLabel(offer.customerDemand)}</dd>
                 </div>
               </dl>
               <div className="offer__actions">
@@ -1746,6 +1793,12 @@ function OffersView({
                   data-tutorial={
                     offer.id === 'starter-bergmann' ? 'accept-offer' : undefined
                   }
+                  disabled={capacityReached}
+                  title={
+                    capacityReached
+                      ? `Kapazität erreicht: ${game.properties.length} von ${capacity} Grundstücken`
+                      : undefined
+                  }
                   onClick={() => onAccept(offer.id)}
                 >
                   Annehmen
@@ -1759,11 +1812,7 @@ function OffersView({
   );
 }
 
-function equipmentBenefits(
-  kind: TaskKind,
-  current: EquipmentLevel,
-  next: EquipmentLevel,
-) {
+function equipmentBenefits(kind: TaskKind, next: EquipmentLevel) {
   if (kind === 'mow') {
     const benefits = [
       {
@@ -1807,18 +1856,23 @@ function equipmentBenefits(
     return benefits;
   }
 
-  const speedIncrease = Math.round((current.speed / next.speed - 1) * 100);
-  const speedBenefit = {
-    label: `Reparaturgeschwindigkeit ${speedIncrease >= 0 ? '+' : '−'}${Math.abs(speedIncrease)} %`,
-    tradeoff: speedIncrease < 0,
-  };
-  const benefits = speedBenefit.tradeoff ? [] : [speedBenefit];
-  if (next.automated && !current.automated)
+  const benefits = [
+    {
+      label: `Reparaturgeschwindigkeit ${Math.round(100 / next.speed)} %`,
+      tradeoff: false,
+    },
+    {
+      label: 'Maximaler Wartungsstatus 100 %',
+      tradeoff: false,
+    },
+  ];
+  if (next.automated) {
+    benefits.push({ label: 'Automatische Wartung', tradeoff: false });
     benefits.push({
-      label: 'Startet bei Bedarf vollautomatisch',
+      label: `Automatischer Start bei ${next.maintenanceTrigger ?? 48} % Wartungsstatus`,
       tradeoff: false,
     });
-  if (speedBenefit.tradeoff) benefits.push(speedBenefit);
+  }
   return benefits;
 }
 
@@ -2084,14 +2138,9 @@ function UpgradesView({
                       index === game.unlocked[activeTab] + 1,
                       researching,
                     );
-                const effects =
-                  index === 0 && activeTab === 'maintain'
-                    ? ['Grundausstattung']
-                    : equipmentBenefits(
-                        activeTab,
-                        EQUIPMENT[activeTab][Math.max(0, index - 1)],
-                        item,
-                      ).map((benefit) => benefit.label);
+                const effects = equipmentBenefits(activeTab, item).map(
+                  (benefit) => benefit.label,
+                );
                 const title =
                   status === 'sequence'
                     ? `Schalte zuerst Stufe ${index} frei.`
@@ -2110,9 +2159,6 @@ function UpgradesView({
                     </td>
                     <td data-label="Upgrade">
                       <span className="upgrade-name">{item.name}</span>
-                      {item.automated && activeTab === 'maintain' && (
-                        <span className="upgrade-badge">Automatisch</span>
-                      )}
                     </td>
                     <td data-label="Features">
                       <UpgradeEffect
@@ -2140,13 +2186,10 @@ function UpgradesView({
               })}
 
             {activeTab === 'workers' &&
-              Array.from({ length: 4 }, (_, index) => {
-                const workerNumber = index + 1;
-                const config = WORKER_UPGRADES.find(
-                  (entry) => entry.workers === workerNumber,
-                );
-                const reputation = config?.reputation ?? 0;
-                const cost = config?.cost ?? 0;
+              WORKER_UPGRADES.map((config) => {
+                const workerNumber = config.workers;
+                const reputation = config.reputation;
+                const cost = config.cost;
                 const hired = workerNumber <= game.workers;
                 const status: UpgradeActionStatus = hired
                   ? 'hired'
@@ -2176,6 +2219,7 @@ function UpgradesView({
                         }
                         effects={[
                           `${workerNumber} parallele ${workerNumber === 1 ? 'Arbeit oder Weiterbildung' : 'Arbeiten oder Weiterbildungen'}`,
+                          `${config.propertyCapacity} zusätzliche Grundstücke · insgesamt ${propertyCapacity(workerNumber)}`,
                         ]}
                       />
                     </td>
@@ -2278,6 +2322,7 @@ export default function Home() {
     cancelTask,
     acceptOffer,
     declineOffer,
+    terminateContract,
     unlockEquipment,
     installEquipment,
     unlockChemistry,
@@ -2346,6 +2391,19 @@ export default function Home() {
   const startGuidedTask = (propertyId: string, kind: TaskKind) => {
     startTask(propertyId, kind);
     if (kind === 'mow' && game.tutorialStep === 7) setTutorialStep(8);
+  };
+
+  const endContract = (propertyId: string) => {
+    const property = game.properties.find((item) => item.id === propertyId);
+    if (!property) return;
+
+    const remaining = game.properties.filter((item) => item.id !== propertyId);
+    terminateContract(propertyId);
+    setSelectedId(remaining[0]?.id ?? '');
+    if (remaining.length === 0) {
+      setView('offers');
+      setMobileDetail(false);
+    }
   };
 
   const openAssignment = (assignment: WorkerAssignment) => {
@@ -2429,6 +2487,7 @@ export default function Home() {
                     startAutomationIntervention(selected.id)
                   }
                   onOpenResearch={() => setView('upgrades')}
+                  onTerminateContract={() => endContract(selected.id)}
                 />
               </div>
 
@@ -2451,6 +2510,7 @@ export default function Home() {
                       startAutomationIntervention(selected.id)
                     }
                     onOpenResearch={() => setView('upgrades')}
+                    onTerminateContract={() => endContract(selected.id)}
                   />
                 </div>
               ) : (
@@ -2477,7 +2537,8 @@ export default function Home() {
                     </span>
                     <h2 className="empty__title">Noch kein aktiver Auftrag</h2>
                     <p className="empty__text">
-                      Nimm zuerst ein Angebot an, um deinen Betrieb zu starten.
+                      Nimm zuerst einen Auftrag an, um deinen Betrieb zu
+                      starten.
                     </p>
                   </div>
                 </div>
@@ -2489,7 +2550,7 @@ export default function Home() {
               <OffersView
                 game={game}
                 onAccept={(id) => {
-                  // Bei mehreren Angeboten bleibt die Liste stehen, damit weiter geprüft werden kann.
+                  // Bei mehreren Aufträgen bleibt die Liste stehen, damit weiter geprüft werden kann.
                   const wasLastOffer = game.offers.length <= 1;
                   const propertyId =
                     id === 'starter-bergmann' ? 'bergmann' : id;

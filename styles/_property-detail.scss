@@ -306,34 +306,29 @@
   }
 }
 
-.condition-breakdown {
+.contract-management {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.condition-breakdown__item {
-  @include num;
-
-  padding: 5px 8px;
-  font-size: 9.5px;
+.contract-management__text {
+  max-width: 34rem;
+  font-size: 11.5px;
+  line-height: 1.45;
   color: var(--ink-mute);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+}
 
-  strong {
-    font-weight: 600;
-    color: var(--tone-ok);
+@media (max-width: 29rem) {
+  .contract-management {
+    align-items: stretch;
+    flex-direction: column;
   }
-}
 
-.condition-breakdown__item--due strong {
-  color: var(--tone-warn);
-}
-
-.condition-breakdown__item--broken strong {
-  color: var(--tone-bad);
+  .action--contract {
+    width: 100%;
+  }
 }
 
 // ------------------------------------------------------------ Aktionsknöpfe
@@ -402,6 +397,14 @@
 .action--maintain {
   --action-kind: var(--kind-cond);
   --action-contrast: #3c2d0b;
+}
+
+.action--contract {
+  --action-kind: var(--tone-bad);
+
+  flex: 0 0 auto;
+  min-width: 176px;
+  padding-inline: 14px;
 }
 
 .action--compact {

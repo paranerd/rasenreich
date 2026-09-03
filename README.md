@@ -6,10 +6,10 @@ Ein deutschsprachiges Casual-Idle-Spiel über den Aufbau eines Rasenpflegebetrie
 
 - Zeitbasierte Aufgaben für Mähen, Bewässern und Wartung
 - Offline-Fortschritt mit Rückkehr-Zusammenfassung
-- Dauerhafte Kundenverträge und zufällige Angebote
+- Kundenverträge mit teamabhängiger Kapazität, Kündigung und zufälligen Aufträgen
 - Globale Technik-Freischaltungen und Anschaffungen pro Grundstück
 - Bis zu vier Mitarbeiter für parallele Arbeiten und Weiterbildungen
-- Automatisierung durch Mähroboter, Versenksprenger und Serviceteam
+- Automatisierung durch Mähroboter, Bewässerungsanlagen und Wartungsservices
 - Wetterereignisse, lokale Speicherung und responsive Bedienung
 - Installierbare Progressive Web App mit Offline-Unterstützung
 

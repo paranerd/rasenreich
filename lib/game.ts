@@ -17,6 +17,8 @@ export interface EquipmentLevel {
   maxCare?: number;
   /** Maximal erreichbarer Bewässerungsgrad. */
   maxWater?: number;
+  /** Wartungsstatus, ab dem ein automatischer Service präventiv startet. */
+  maintenanceTrigger?: number;
   description: string;
 }
 
@@ -108,6 +110,8 @@ export interface GardenProperty {
   equipmentCondition: Record<BreakableKind, number>;
   satisfaction: number;
   equipment: Record<TaskKind, number>;
+  /** Zeitpunkt, zu dem die aktuell installierte Technik angeschafft wurde. */
+  equipmentInstalledAt: Record<TaskKind, number>;
   /** Ausgefallene Geräte. Ein defektes Gerät sperrt nur seine eigene Aufgabe. */
   broken: Record<BreakableKind, boolean>;
   fertilizer: boolean;
@@ -155,7 +159,7 @@ export interface GameLog {
   tone: 'good' | 'neutral' | 'warning';
 }
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 17;
 const SUPPORTED_VERSIONS = [
   1,
   2,
@@ -171,6 +175,8 @@ const SUPPORTED_VERSIONS = [
   12,
   13,
   14,
+  15,
+  16,
   SAVE_VERSION,
 ];
 
@@ -180,13 +186,24 @@ export interface WorkerUpgrade {
   workers: number;
   reputation: number;
   cost: number;
+  /** Zusätzliche Grundstücke, die genau dieser Mitarbeiter betreuen kann. */
+  propertyCapacity: number;
 }
 
 export const WORKER_UPGRADES: WorkerUpgrade[] = [
-  { workers: 2, reputation: 5, cost: 500 },
-  { workers: 3, reputation: 15, cost: 2_500 },
-  { workers: 4, reputation: 30, cost: 10_000 },
+  { workers: 1, reputation: 0, cost: 0, propertyCapacity: 3 },
+  { workers: 2, reputation: 5, cost: 500, propertyCapacity: 4 },
+  { workers: 3, reputation: 15, cost: 2_500, propertyCapacity: 5 },
+  { workers: 4, reputation: 30, cost: 10_000, propertyCapacity: 6 },
 ];
+
+/** Summe der individuellen Grundstückskapazitäten aller Mitarbeiter. */
+export function propertyCapacity(workers: number) {
+  const workerCount = Math.min(MAX_WORKERS, Math.max(1, Math.floor(workers)));
+  return WORKER_UPGRADES.filter(
+    (employee) => employee.workers <= workerCount,
+  ).reduce((sum, employee) => sum + employee.propertyCapacity, 0);
+}
 
 export interface GameState {
   version: number;
@@ -441,33 +458,92 @@ export const EQUIPMENT: Record<TaskKind, EquipmentLevel[]> = {
   ],
   maintain: [
     {
-      name: 'Werkzeugtasche',
+      name: 'FlickFix Tasche',
       installCost: 0,
       reputation: 0,
       speed: 1,
-      description: 'Alles Nötige für einfache Reparaturen.',
+      description:
+        'Die kompakte Grundausstattung für Wartung und einfache Reparaturen.',
     },
     {
-      name: 'Profiwerkzeug',
-      installCost: 480,
-      reputation: 6,
-      speed: 0.72,
-      description: 'Präzisere Wartung mit weniger Zeitaufwand.',
+      name: 'Ratschen-Rakete 200',
+      installCost: 300,
+      reputation: 4,
+      speed: 0.8,
+      description:
+        'Ein sortierter Ratschenkoffer beschleunigt jeden Handgriff.',
     },
     {
-      name: 'Akkuwerkzeug',
-      installCost: 1_350,
-      reputation: 14,
-      speed: 0.5,
-      description: 'Reparaturen gehen deutlich schneller von der Hand.',
+      name: 'Schraubkraft 500',
+      installCost: 850,
+      reputation: 9,
+      speed: 0.625,
+      description:
+        'Präzisionswerkzeug und Messgeräte finden Fehler deutlich schneller.',
     },
     {
-      name: 'Serviceteam',
-      installCost: 6_300,
-      reputation: 28,
+      name: 'AkkuBlitz 1000',
+      installCost: 2_200,
+      reputation: 16,
+      speed: 0.455,
+      description:
+        'Kräftige Akkuwerkzeuge lösen festsitzende Teile ohne Zeitverlust.',
+    },
+    {
+      name: 'RollWerk 3000',
+      installCost: 4_800,
+      reputation: 26,
+      speed: 0.333,
+      description:
+        'Ein mobiler Werkstattwagen bringt Ersatzteile und Spezialwerkzeug direkt mit.',
+    },
+    {
+      name: 'PitStop Deluxe',
+      installCost: 10_500,
+      reputation: 38,
       speed: 0.25,
+      description:
+        'Diagnosestation und Profiwerkzeug liefern maximale aktive Reparaturleistung.',
+    },
+    {
+      name: 'ServiceSprint Easy',
+      installCost: 18_000,
+      reputation: 50,
+      speed: 1.25,
       automated: true,
-      description: 'Kümmert sich automatisch um gefährdete Geräte.',
+      maintenanceTrigger: 35,
+      description:
+        'Ein Bereitschaftsdienst übernimmt kritische Wartungen automatisch.',
+    },
+    {
+      name: 'FixFleet Pro',
+      installCost: 33_000,
+      reputation: 64,
+      speed: 1,
+      automated: true,
+      maintenanceTrigger: 50,
+      description:
+        'Ein mobiles Serviceteam reagiert früher und arbeitet ohne Mitarbeiter.',
+    },
+    {
+      name: 'RepairRadar Deluxe',
+      installCost: 62_000,
+      reputation: 80,
+      speed: 0.8,
+      automated: true,
+      maintenanceTrigger: 65,
+      description:
+        'Ferndiagnose erkennt Verschleiß, bevor daraus ein Ausfall entsteht.',
+    },
+    {
+      name: 'TerraCare Ultra',
+      installCost: 115_000,
+      reputation: 98,
+      speed: 0.625,
+      automated: true,
+      maintenanceTrigger: 80,
+      description:
+        'Vorausschauender Rundum-Service hält den gesamten Gerätepark einsatzbereit.',
     },
   ],
 };
@@ -489,7 +565,33 @@ const OFFER_TEMPLATES = [
   {
     minRep: 1,
     type: 'Wohnhaus',
-    names: ['Familie Wagner', 'Herr Krüger', 'Familie Neumann'],
+    names: [
+      'Familie Wagner',
+      'Herr Krüger',
+      'Familie Neumann',
+      'Familie Özdemir',
+      'Frau Hansen',
+      'Familie Becker',
+      'Herr Yilmaz',
+      'Familie König',
+      'Frau Peters',
+      'Familie Brandt',
+      'Herr Scholz',
+      'Familie Nguyen',
+      'Frau Sommer',
+      'Familie Albrecht',
+      'Herr Nowak',
+    ],
+    descriptions: [
+      'Der Rasen soll ordentlich sein, aber bitte nicht verdächtig ordentlich.',
+      'Beim Nachbarn ist es grüner. Das soll sich ändern.',
+      'Der Vorgarten hat einen Ruf zu verlieren.',
+      'Zwischen Sandkasten und Hecke wartet ehrliche Gartenarbeit.',
+      'Sonntags wird gegrillt – der Rasen kennt seinen Termin.',
+      'Ein kleiner Garten mit erstaunlich großer Erwartungshaltung.',
+      'Der Mähroboter wurde im Familienrat knapp abgewählt.',
+      'Die Hecke beobachtet alles, hält sich aber heraus.',
+    ],
     sizes: [140, 180],
     growth: 1,
     drainage: 1,
@@ -498,7 +600,33 @@ const OFFER_TEMPLATES = [
   {
     minRep: 7,
     type: 'Stadtvilla',
-    names: ['Villa Lindenhof', 'Haus am Park', 'Familie Seidel'],
+    names: [
+      'Villa Lindenhof',
+      'Haus am Park',
+      'Familie Seidel',
+      'Villa Sonnenuhr',
+      'Palais Rosenbogen',
+      'Villa Hagedorn',
+      'Haus Magnolie',
+      'Villa Abendrot',
+      'Residenz Birkenhain',
+      'Villa Morgenstern',
+      'Haus Bellevue',
+      'Villa Kupferdach',
+      'Anwesen Silberlinde',
+      'Villa Marienhöhe',
+      'Haus am Brunnen',
+    ],
+    descriptions: [
+      'Große Einfahrt, präzise Rasenkanten, diskrete Erwartungen.',
+      'Der Springbrunnen liefert Atmosphäre, leider keine Bewässerung.',
+      'Hier wird selbst das Gras standesgemäß empfangen.',
+      'Die Aussicht ist gepflegt. Der Rasen möchte nachziehen.',
+      'Zwischen Kiesweg und Terrasse zählt jeder Halm.',
+      'Der Garten ist großzügig, die Toleranz eher weniger.',
+      'Repräsentativ soll es sein – auch montagmorgens.',
+      'Das Anwesen bevorzugt klare Linien und leise Mäher.',
+    ],
     sizes: [260, 420],
     growth: 1.12,
     drainage: 0.9,
@@ -507,7 +635,33 @@ const OFFER_TEMPLATES = [
   {
     minRep: 14,
     type: 'Firmengelände',
-    names: ['Nordwerk Büropark', 'Klar & Co.', 'Kontor West'],
+    names: [
+      'Nordwerk Büropark',
+      'Klar & Co.',
+      'Kontor West',
+      'Hanseatic Digital',
+      'Pixel & Partner',
+      'Krämer Logistik',
+      'Grünwald Steuerbüro',
+      'Schmidt & Söhne',
+      'Büroforum Mitte',
+      'Morgenrot Medien',
+      'Werkhof 17',
+      'Lindenberg Pharma',
+      'Raum & Form',
+      'Westend Kanzlei',
+      'TechTanne GmbH',
+    ],
+    descriptions: [
+      'Die Belegschaft braucht Grün zwischen zwei Videokonferenzen.',
+      'Der Empfang zählt Halme vermutlich nicht – vermutlich.',
+      'Die Mittagspause soll wieder nach Park aussehen.',
+      'Ein gepflegter Außenbereich fürs nächste Gruppenfoto.',
+      'Der Hausmeister hat genug Tabellen, aber keinen Mäher.',
+      'Zwischen Parkplatz und Eingang ist noch Luft nach oben.',
+      'Die Geschäftsführung nennt es Standortqualität.',
+      'Freitags kommt Besuch. Der Rasen weiß es noch nicht.',
+    ],
     sizes: [520, 850],
     growth: 0.92,
     drainage: 1.15,
@@ -516,7 +670,33 @@ const OFFER_TEMPLATES = [
   {
     minRep: 24,
     type: 'Landgut',
-    names: ['Gut Eichenfeld', 'Hof Rosenau', 'Landhaus Falken'],
+    names: [
+      'Gut Eichenfeld',
+      'Hof Rosenau',
+      'Landhaus Falken',
+      'Gut Birkenmoor',
+      'Hof Sonnenrain',
+      'Landgut Apfelhöhe',
+      'Gut Morgenweide',
+      'Hof Albers',
+      'Landhaus Wiesenblick',
+      'Gut Hohenrain',
+      'Hof Kleeberg',
+      'Landgut Silberbach',
+      'Gut Tannenruh',
+      'Hof Windrose',
+      'Landhaus Kornblume',
+    ],
+    descriptions: [
+      'Viel Fläche, viel Ruhe und überraschend genaue Vorstellungen.',
+      'Der Hofhund überwacht die Arbeiten ohne Personalverantwortung.',
+      'Die Aussicht ist weit, die Mähkante soll es nicht sein.',
+      'Zwischen Obstbäumen und Scheune wartet ein langer Arbeitstag.',
+      'Der Traktor ist beschäftigt. Der Rasen leider auch.',
+      'Hier endet der Blick später als der Mähdurchgang.',
+      'Landluft inklusive, Abkürzungen eher nicht.',
+      'Die Pferde urteilen still, aber deutlich.',
+    ],
     sizes: [900, 1_500],
     growth: 1.2,
     drainage: 1.08,
@@ -525,13 +705,79 @@ const OFFER_TEMPLATES = [
   {
     minRep: 38,
     type: 'Parkanlage',
-    names: ['Bürgerpark Süd', 'Kurpark Waldheim', 'Campus Grün'],
+    names: [
+      'Bürgerpark Süd',
+      'Kurpark Waldheim',
+      'Campus Grün',
+      'Stadtpark Nord',
+      'Rosengarten West',
+      'Uferpark Lindenau',
+      'Botanischer Hof',
+      'Park am Wasserturm',
+      'Promenadengarten',
+      'Campuspark Ost',
+      'Schlosspark Buchenhain',
+      'Generationengarten',
+      'Kulturpark Mitte',
+      'Seepark Höhenfeld',
+      'Arboretum Sonnenhang',
+    ],
+    descriptions: [
+      'Viele Wege, noch mehr Rasen und stets ein kritischer Spaziergänger.',
+      'Die Enten sind nicht zuständig, treten aber geschlossen auf.',
+      'Ein Park für alle – inklusive sehr engagierter Tauben.',
+      'Die Wege sind kurvig, die Erwartungen erstaunlich gerade.',
+      'Der Veranstaltungskalender ist voll, der Rasen ebenfalls.',
+      'Zwischen Bänken und Beeten zählt verlässliche Pflege.',
+      'Öffentliches Grün, öffentlich bemerkte Mähkanten.',
+      'Der Park schläft nie, macht aber gelegentlich Mittagspause.',
+    ],
     sizes: [1_800, 3_200],
     growth: 1.05,
     drainage: 1.2,
     demand: 1.35,
   },
 ] as const;
+
+function offerDescription(type: string, seed?: string) {
+  const descriptions = OFFER_TEMPLATES.find(
+    (template) => template.type === type,
+  )?.descriptions;
+  if (!descriptions?.length) return undefined;
+  if (!seed)
+    return descriptions[Math.floor(Math.random() * descriptions.length)];
+
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return descriptions[hash % descriptions.length];
+}
+
+const OFFER_REFERENCE_BASE_PAYOUT = 40;
+const OFFER_REFERENCE_AREA_SQUARE_METERS = 100;
+const OFFER_AREA_SCALING_EXPONENT = 0.78;
+const CUSTOMER_DEMAND_NORMAL_MINIMUM = 1;
+const CUSTOMER_DEMAND_HIGH_THRESHOLD = 1.2;
+
+/** Grundbetrag eines Auftrags aus Fläche und Kundenanspruch. */
+export function offerBasePayout(size: number, customerDemand: number) {
+  return Math.round(
+    OFFER_REFERENCE_BASE_PAYOUT *
+      Math.pow(
+        size / OFFER_REFERENCE_AREA_SQUARE_METERS,
+        OFFER_AREA_SCALING_EXPONENT,
+      ) *
+      customerDemand,
+  );
+}
+
+/** Lesbare Anspruchsstufe zum numerischen Kundenfaktor. */
+export function customerDemandLabel(customerDemand: number) {
+  if (customerDemand > CUSTOMER_DEMAND_HIGH_THRESHOLD) return 'Hoch';
+  if (customerDemand < CUSTOMER_DEMAND_NORMAL_MINIMUM) return 'Niedrig';
+  return 'Normal';
+}
 
 const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -540,6 +786,30 @@ const clamp = (value: number, min = 0, max = 100) =>
 const clone = <T>(value: T): T => structuredClone(value);
 const nextRandomOfferAt = (now: number) =>
   now + (45 + Math.random() * 135) * 1_000;
+
+const EQUIPMENT_RESIDUAL_MAX_SHARE = 0.7;
+const EQUIPMENT_RESIDUAL_MIN_SHARE = 0.15;
+const EQUIPMENT_DEPRECIATION_MS = 30 * 24 * 60 * 60_000;
+
+/**
+ * Technik startet bei 70 % Restwert und fällt über 30 reale Tage linear auf
+ * 15 %. Die kostenlose Grundausstattung trägt entsprechend nichts bei.
+ */
+export function equipmentResidualValue(
+  property: GardenProperty,
+  now = Date.now(),
+) {
+  return (['mow', 'water', 'maintain'] as const).reduce((sum, kind) => {
+    const equipment = EQUIPMENT[kind][property.equipment[kind]];
+    const age = Math.max(0, now - property.equipmentInstalledAt[kind]);
+    const depreciation = Math.min(1, age / EQUIPMENT_DEPRECIATION_MS);
+    const share =
+      EQUIPMENT_RESIDUAL_MAX_SHARE -
+      depreciation *
+        (EQUIPMENT_RESIDUAL_MAX_SHARE - EQUIPMENT_RESIDUAL_MIN_SHARE);
+    return sum + Math.round(equipment.installCost * share);
+  }, 0);
+}
 
 const addLog = (
   state: GameState,
@@ -588,11 +858,11 @@ export function createInitialState(now = Date.now()): GameState {
         subtitle: 'Dein erster Auftrag',
         type: 'Vorgarten',
         size: 120,
-        payout: 40,
+        payout: offerBasePayout(120, 0.9),
         growthFactor: 1,
         drainage: 1,
         customerDemand: 0.9,
-        // Das Einführungsangebot verfällt nicht, während der Spieler liest.
+        // Der Einführungsauftrag verfällt nicht, während der Spieler liest.
         expiresAt: now + 365 * 24 * 60 * 60_000,
       },
     ],
@@ -825,6 +1095,11 @@ export function mowingPayout(property: GardenProperty, grass = property.grass) {
 export function wateringPayout(property: GardenProperty) {
   const deficit = Math.max(0, wateringTarget(property) - property.moisture);
   return Math.round(property.payout * 0.6 * Math.min(1, deficit / 60));
+}
+
+/** Maximale Vergütung für vollständiges Mähen und Bewässern zusammen. */
+export function offerMaxCareRoundPayout(offer: ContractOffer) {
+  return Math.round(offer.payout * 1.2) + Math.round(offer.payout * 0.6);
 }
 
 /** Ertrag einer Aufgabe — Wartung kostet, statt zu zahlen. */
@@ -1125,9 +1400,14 @@ function startAutomatedTask(
 }
 
 function tryAutomation(state: GameState, property: GardenProperty, at: number) {
+  const maintenanceEquipment = EQUIPMENT.maintain[property.equipment.maintain];
+  const maintenanceTrigger = maintenanceEquipment.maintenanceTrigger ?? 48;
   if (
-    isAutomated(property, 'maintain') &&
-    (equipmentCondition(property) <= 48 || isBroken(property))
+    maintenanceEquipment.automated &&
+    (BREAKABLE.some(
+      (kind) => equipmentCondition(property, kind) <= maintenanceTrigger,
+    ) ||
+      isBroken(property))
   ) {
     startAutomatedTask(state, property, 'maintain', at);
   }
@@ -1232,11 +1512,12 @@ function createOffer(state: GameState, now: number): ContractOffer | undefined {
   const size = Math.round(
     template.sizes[0] + Math.random() * (template.sizes[1] - template.sizes[0]),
   );
-  const payout = Math.round(40 * Math.pow(size / 120, 0.78) * template.demand);
+  const payout = offerBasePayout(size, template.demand);
   return {
     id: uid(),
     name,
-    subtitle: `${template.type} in deiner Region`,
+    subtitle:
+      offerDescription(template.type) ?? `${template.type} in deiner Region`,
     type: template.type,
     size,
     payout,
@@ -1249,7 +1530,7 @@ function createOffer(state: GameState, now: number): ContractOffer | undefined {
 
 /**
  * Jede neu erreichte Reputationsstufe erzeugt garantiert eine Anfrage. Ist
- * die Liste voll, weicht dafür das Angebot mit der kürzesten Restlaufzeit.
+ * die Liste voll, weicht dafür der Auftrag mit der kürzesten Restlaufzeit.
  */
 function addLevelUpOffers(
   state: GameState,
@@ -1349,7 +1630,23 @@ export function migrateState(raw: GameState): GameState | undefined {
     state.unlocked.water =
       state.unlocked.water === 0 ? 0 : state.unlocked.water === 1 ? 3 : 6;
   }
+  // Die frühere vierstufige Reparaturreihe wird auf ihre direkten Nachfolger
+  // abgebildet. Das automatische Serviceteam bleibt dabei automatisiert.
+  const maintenanceLevelMap = [0, 2, 3, 6];
+  if (raw.version < 16) {
+    state.unlocked.maintain =
+      maintenanceLevelMap[state.unlocked.maintain] ?? state.unlocked.maintain;
+  }
   state.properties.forEach((property) => {
+    if (property.subtitle === `${property.type} in deiner Region`) {
+      property.subtitle =
+        offerDescription(property.type, property.id) ?? property.subtitle;
+    }
+    property.equipmentInstalledAt ??= {
+      mow: state.lastUpdatedAt,
+      water: state.lastUpdatedAt,
+      maintain: state.lastUpdatedAt,
+    };
     property.moisture = clamp(property.moisture, 0, 100);
     if (raw.version < 8 && property.equipment.mow >= 4)
       property.equipment.mow += 2;
@@ -1360,6 +1657,11 @@ export function migrateState(raw: GameState): GameState | undefined {
           : property.equipment.water === 1
             ? 3
             : 6;
+    }
+    if (raw.version < 16) {
+      property.equipment.maintain =
+        maintenanceLevelMap[property.equipment.maintain] ??
+        property.equipment.maintain;
     }
     if (raw.version < 15 && property.robotIntervention) {
       property.automationIntervention = {
@@ -1402,6 +1704,11 @@ export function migrateState(raw: GameState): GameState | undefined {
       }
     });
   });
+  state.offers.forEach((offer) => {
+    if (offer.subtitle === `${offer.type} in deiner Region`) {
+      offer.subtitle = offerDescription(offer.type, offer.id) ?? offer.subtitle;
+    }
+  });
   const legacyEventType = (state.activeEvent as { type?: string } | undefined)
     ?.type;
   if (legacyEventType === 'pipe' || legacyEventType === 'frost') {
@@ -1438,6 +1745,17 @@ export function migrateState(raw: GameState): GameState | undefined {
           : 6;
     state.researchTask.name =
       EQUIPMENT.water[state.researchTask.targetLevel].name;
+  }
+  if (
+    raw.version < 16 &&
+    state.researchTask?.kind === 'maintain' &&
+    state.researchTask.targetLevel !== undefined
+  ) {
+    state.researchTask.targetLevel =
+      maintenanceLevelMap[state.researchTask.targetLevel] ??
+      state.researchTask.targetLevel;
+    state.researchTask.name =
+      EQUIPMENT.maintain[state.researchTask.targetLevel].name;
   }
   // Seit Version 11 kostet Lernen nur noch Zeit. Eine beim Speichern bereits
   // bezahlte laufende Weiterbildung wird deshalb vollständig erstattet.
@@ -1890,8 +2208,16 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
   const state = clone(source);
   const offer = state.offers.find((item) => item.id === offerId);
   if (!offer)
-    return { state, message: 'Dieses Angebot ist nicht mehr verfügbar.' };
+    return { state, message: 'Dieser Auftrag ist nicht mehr verfügbar.' };
+  const capacity = propertyCapacity(state.workers);
+  if (state.properties.length >= capacity) {
+    return {
+      state,
+      message: `Dein Team kann höchstens ${capacity} Grundstücke betreuen. Stelle einen weiteren Mitarbeiter ein oder kündige einen Vertrag.`,
+    };
+  }
   const starter = offer.id === 'starter-bergmann';
+  const now = Date.now();
   state.properties.push({
     id: starter ? 'bergmann' : offer.id,
     name: offer.name,
@@ -1911,6 +2237,7 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
     },
     satisfaction: 78,
     equipment: { mow: 0, water: 0, maintain: 0 },
+    equipmentInstalledAt: { mow: now, water: now, maintain: now },
     broken: { mow: false, water: false },
     tasks: [],
     fertilizer: false,
@@ -1926,6 +2253,35 @@ export function acceptOffer(source: GameState, offerId: string): GameResult {
   return { state, message: `Vertrag mit ${offer.name} angenommen.` };
 }
 
+/**
+ * Beendet einen Stammkundenvertrag sofort. Laufende Arbeiten und die dort
+ * installierte Technik gehören zum Vertrag und werden nicht erstattet.
+ */
+export function terminateContract(
+  source: GameState,
+  propertyId: string,
+): GameResult {
+  const state = clone(source);
+  const property = state.properties.find((item) => item.id === propertyId);
+  if (!property)
+    return { state, message: 'Dieser Vertrag ist nicht mehr aktiv.' };
+
+  const residualValue = equipmentResidualValue(property);
+  state.money += residualValue;
+  state.properties = state.properties.filter((item) => item.id !== propertyId);
+  if (state.activeEvent?.propertyId === propertyId)
+    state.activeEvent = undefined;
+  addLog(
+    state,
+    `Vertrag mit ${property.name} gekündigt · ${formatMoney(residualValue)} Restwert erhalten.`,
+    'warning',
+  );
+  return {
+    state,
+    message: `Vertrag gekündigt · ${formatMoney(residualValue)} Restwert erhalten.`,
+  };
+}
+
 export function declineOffer(source: GameState, offerId: string): GameResult {
   const state = clone(source);
   if (offerId === 'starter-bergmann') {
@@ -1936,7 +2292,7 @@ export function declineOffer(source: GameState, offerId: string): GameResult {
     state.nextOfferAt,
     nextRandomOfferAt(Date.now()),
   );
-  return { state, message: 'Angebot abgelehnt. Bald erscheint ein neues.' };
+  return { state, message: 'Auftrag abgelehnt. Bald erscheint ein neuer.' };
 }
 
 export function hireWorker(source: GameState): GameResult {
@@ -1959,7 +2315,7 @@ export function hireWorker(source: GameState): GameResult {
   addLog(state, `${state.workers}. Mitarbeiter eingestellt.`, 'good');
   return {
     state,
-    message: `Dein Betrieb hat jetzt ${state.workers} Mitarbeiter.`,
+    message: `Dein Betrieb hat jetzt ${state.workers} Mitarbeiter und Platz für ${propertyCapacity(state.workers)} Grundstücke.`,
   };
 }
 
@@ -2024,6 +2380,7 @@ export function installEquipment(
     return { state, message: 'Dafür reicht dein Guthaben noch nicht.' };
   state.money -= item.installCost;
   property.equipment[kind] = targetLevel;
+  property.equipmentInstalledAt[kind] = Date.now();
   if (kind !== 'maintain') {
     property.equipmentCondition[kind] = 100;
     property.broken[kind] = false;

@@ -31,13 +31,13 @@ const STEPS: TutorialCopy[] = [
     text: 'Pflege Grundstücke, halte deine Kunden zufrieden und baue aus kleinen Aufträgen einen starken Gartenbetrieb auf.',
   },
   {
-    title: 'Dein erstes Angebot',
-    text: 'Jedes Angebot zeigt dir Fläche, mögliche Vergütung und die Eigenheiten des Grundstücks. Diese Werte bestimmen Aufwand und Ertrag.',
+    title: 'Dein erster Auftrag',
+    text: 'Jeder Auftrag zeigt dir Fläche, mögliche Vergütung und die Eigenheiten des Grundstücks. Diese Werte bestimmen Aufwand und Ertrag.',
     target: 'starter-offer',
   },
   {
     title: 'Gewinne deinen ersten Kunden',
-    text: 'Nimm das Angebot von Familie Bergmann an, um das Grundstück in deinen Betrieb aufzunehmen.',
+    text: 'Nimm den Auftrag von Familie Bergmann an, um das Grundstück in deinen Betrieb aufzunehmen.',
     target: 'accept-offer',
     action: true,
   },
